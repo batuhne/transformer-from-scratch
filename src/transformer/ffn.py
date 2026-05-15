@@ -21,11 +21,10 @@ class FeedForward:
     def backward(self, dout: np.ndarray) -> np.ndarray:
         return self.linear1.backward(self.relu.backward(self.linear2.backward(dout)))
 
-    @property
-    def parameters(self) -> dict[str, np.ndarray]:
-        return {
-            "W1": self.linear1.W,
-            "b1": self.linear1.b,
-            "W2": self.linear2.W,
-            "b2": self.linear2.b,
-        }
+    def params(self) -> list[tuple[object, str]]:
+        return [
+            (self.linear1, "W"),
+            (self.linear1, "b"),
+            (self.linear2, "W"),
+            (self.linear2, "b"),
+        ]
