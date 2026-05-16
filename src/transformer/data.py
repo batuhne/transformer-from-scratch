@@ -17,7 +17,7 @@ class CharVocab:
     idx_to_char: dict[int, str]
 
     @classmethod
-    def from_text(cls, text: str) -> "CharVocab":
+    def from_text(cls, text: str) -> CharVocab:
         chars = sorted(set(text))
         char_to_idx = {c: i for i, c in enumerate(chars)}
         idx_to_char = {i: c for i, c in enumerate(chars)}

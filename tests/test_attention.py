@@ -29,7 +29,8 @@ def _loss_factory(attn, name, x, mask, dout):
 def test_attention_projection_gradients_match_numerical() -> None:
     attn, x, mask, dout = _setup()
     for name in ("W_Q", "W_K", "W_V"):
-        num = numerical_gradient(_loss_factory(attn, name, x, mask, dout), getattr(attn, name).copy())
+        loss = _loss_factory(attn, name, x, mask, dout)
+        num = numerical_gradient(loss, getattr(attn, name).copy())
         analytical = getattr(attn, f"d{name}")
         assert relative_error(analytical, num) < 1e-5, f"{name} gradient mismatch"
 
