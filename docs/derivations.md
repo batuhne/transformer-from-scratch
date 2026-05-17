@@ -14,6 +14,7 @@ explicit by the bounds.
 - [1. Softmax and cross-entropy: the combined gradient](#1-softmax-and-cross-entropy-the-combined-gradient)
 - [2. LayerNorm backward](#2-layernorm-backward)
 - [3. Scaled dot-product attention: gradients in matrix form](#3-scaled-dot-product-attention-gradients-in-matrix-form)
+- [4. Multi-head reshape in tensor index notation](#4-multi-head-reshape-in-tensor-index-notation)
 
 ## 1. Softmax and cross-entropy: the combined gradient
 
@@ -474,3 +475,144 @@ against central differences. During the derivation here we also confirmed
 $\mathrm{d}Q$, $\mathrm{d}K$, $\mathrm{d}V$ directly at the pre-projection
 level on $T=4, d_k=3$ random tensors: all three matched numerically with
 relative error below $1.3 \times 10^{-9}$.
+
+## 4. Multi-head reshape in tensor index notation
+
+**Implementation:** `src/transformer/mha.py`.
+**Numerical check:** `tests/test_mha.py::test_mha_projection_gradients_match_numerical`,
+`::test_mha_dx_matches_numerical`,
+`::test_mha_attention_weights_respect_causal_mask`.
+
+Multi-head attention does not introduce any new calculus. It is the
+single-head attention of section&nbsp;3 applied to $H$ disjoint $d_k$-wide
+slices of the embedding axis, plus an output projection. The "split heads"
+and "merge heads" reshapes look like rearrangements of memory and nothing
+more; what they actually do is pick out and re-assemble those slices. Writing
+this out in index notation makes the equivalence explicit, so the backward
+needs no new derivation.
+
+### The reshape, in indices
+
+Let $d_{\text{model}} = H \cdot d_k$. The split reshape acts on a tensor of
+shape $(B, T, d_{\text{model}})$ and returns one of shape $(B, H, T, d_k)$:
+
+$$
+(\texttt{split}(X))_{b, h, t, k} = X_{b, t, h \cdot d_k + k},
+\qquad h \in \{0, \dots, H-1\}, \; k \in \{0, \dots, d_k - 1\}.
+$$
+
+This is a bijection between the index sets $\{(b, t, d)\}$ (with $d \in [0,
+d_{\text{model}})$) and $\{(b, h, t, k)\}$. Pythonically the call performs a
+`reshape((B, T, H, d_k))` followed by `transpose((0, 2, 1, 3))`. The merge
+reshape is the literal inverse:
+
+$$
+(\texttt{merge}(Y))_{b, t, h \cdot d_k + k} = Y_{b, h, t, k}.
+$$
+
+Because both maps are bijections of indices that carry tensor values
+unchanged, they are isometries: forward backward of either reshape is the
+other. Concretely, $\partial \texttt{split} / \partial X$ contracted with
+any cotangent $\mathrm{d}Y$ is just $\texttt{merge}(\mathrm{d}Y)$, and vice
+versa. The backward in `mha.py` exploits this by calling `_split_heads` on
+the gradient flowing back through `merge` (line&nbsp;89) and `_merge_heads`
+on the gradients flowing back through `split` (lines&nbsp;101-103).
+
+### MHA equals $H$ parallel single-head attentions
+
+Define per-head projection slices
+
+$$
+W_{Q, h} := W_Q[\,:,\, h \cdot d_k : (h+1) \cdot d_k] \in \mathbb{R}^{d_{\text{model}} \times d_k},
+$$
+
+and similarly $W_{K, h}, W_{V, h}$. Then column $h \cdot d_k + k$ of $XW_Q$ is
+
+$$
+(X W_Q)_{b, t, h \cdot d_k + k}
+= \sum_{d=0}^{d_{\text{model}}-1} X_{b, t, d} \cdot (W_Q)_{d, h \cdot d_k + k}
+= (X W_{Q, h})_{b, t, k}.
+$$
+
+So the split-then-project pipeline is identical to project-then-split:
+
+$$
+\texttt{split}(XW_Q)_{b, h, t, k} = (X W_{Q, h})_{b, t, k}.
+$$
+
+Now feed each head through the section&nbsp;3 scaled dot-product attention:
+
+$$
+O_h = \operatorname{attn}(X W_{Q, h}, X W_{K, h}, X W_{V, h}),
+\qquad O_h \in \mathbb{R}^{B \times T \times d_k}.
+$$
+
+The merge reshape concatenates these along the feature axis:
+
+$$
+\texttt{merge}((O_h)_{h=0}^{H-1})_{b, t, h \cdot d_k + k} = (O_h)_{b, t, k}.
+$$
+
+The final output is one Linear:
+
+$$
+Y = \operatorname{merge}(O) \, W_O \in \mathbb{R}^{B \times T \times d_{\text{model}}}.
+$$
+
+This factorization was confirmed numerically: instantiating an MHA with
+$d_{\text{model}}=12, H=3, T=5$ and rebuilding the output with three
+independent `SingleHeadAttention` modules sharing sliced parameters produced
+the same tensor (max absolute difference $0$).
+
+### Backward, head by head
+
+Given $\mathrm{d}Y$:
+
+1. **$W_O$ backward**: $Y = \operatorname{merge}(O) W_O$ is a Linear, so
+
+   $$
+   \mathrm{d}W_O = \operatorname{merge}(O)^{\top} \mathrm{d}Y,
+   \qquad
+   \mathrm{d}\operatorname{merge}(O) = \mathrm{d}Y \, W_O^{\top}.
+   $$
+
+   (`mha.py:87-88`.)
+
+2. **Reshape**: apply `split` to $\mathrm{d}\operatorname{merge}(O)$ to get
+   $\mathrm{d}O_h$ for each head. This is `mha.py:89`.
+
+3. **Per-head section&nbsp;3 backward**: for each $h$, run the single-head
+   backward of section&nbsp;3 with $V_h$, $A_h$, $K_h$, $Q_h$ in place of
+   $V, A, K, Q$. This yields $\mathrm{d}Q_h, \mathrm{d}K_h, \mathrm{d}V_h$ of
+   shape $(B, T, d_k)$ each. The code does this in parallel across the head
+   axis using 4D matmul (`mha.py:91-99`).
+
+4. **Reassemble**: merge the per-head gradients back into the original
+   layout, $\mathrm{d}(X W_Q) = \operatorname{merge}((\mathrm{d}Q_h)_h)$, then
+   apply the Linear backward of $Q = X W_Q$:
+
+   $$
+   \mathrm{d}W_Q = X^{\top} \, \mathrm{d}(X W_Q),
+   $$
+
+   and likewise for $W_K, W_V$. The contributions to $\mathrm{d}X$ from the
+   three projections sum:
+
+   $$
+   \mathrm{d}X = \mathrm{d}(X W_Q) W_Q^{\top} + \mathrm{d}(X W_K) W_K^{\top} + \mathrm{d}(X W_V) W_V^{\top}.
+   $$
+
+   (`mha.py:101-110`.)
+
+### Numerical check (sketch)
+
+`test_mha_projection_gradients_match_numerical` checks $\mathrm{d}W_Q,
+\mathrm{d}W_K, \mathrm{d}W_V, \mathrm{d}W_O$ for an MHA with $d_{\text{model}}
+= 8, H = 2$ against central differences. `test_mha_dx_matches_numerical`
+checks $\mathrm{d}X$ similarly. Both pass with relative error well below
+$10^{-5}$.
+
+Because the factorization above is exact, the matrix-form code does not loop
+over heads: each step ($A V$, the softmax jacobian, $QK^{\top}$, etc.) is
+done with a 4D matmul that contracts over the appropriate axis, and the
+result is identical to running $H$ independent single-head backwards.
