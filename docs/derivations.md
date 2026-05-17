@@ -13,6 +13,7 @@ explicit by the bounds.
 
 - [1. Softmax and cross-entropy: the combined gradient](#1-softmax-and-cross-entropy-the-combined-gradient)
 - [2. LayerNorm backward](#2-layernorm-backward)
+- [3. Scaled dot-product attention: gradients in matrix form](#3-scaled-dot-product-attention-gradients-in-matrix-form)
 
 ## 1. Softmax and cross-entropy: the combined gradient
 
@@ -298,3 +299,178 @@ Direct verification (during the derivation of this section): the analytical
 $\mathrm{d}x$ matches central differences with relative error $\approx 4 \times
 10^{-10}$, and the dense Jacobian $\partial \hat{x}_i / \partial x_k$ matches
 its numerical counterpart with absolute error $\approx 3.5 \times 10^{-10}$.
+
+## 3. Scaled dot-product attention: gradients in matrix form
+
+**Implementation:** `src/transformer/attention.py`.
+**Numerical check:** `tests/test_attention.py::test_attention_projection_gradients_match_numerical`
+and `::test_attention_dx_matches_numerical`.
+
+The attention block is a stack of five operations, all linear or row-wise.
+Each one is simple in isolation; the value of writing this section is to keep
+the matrix shapes straight and to confirm that the row-wise softmax gradient
+combines correctly with the scale and masking.
+
+### Forward
+
+Drop the batch axis for clarity. Let $X \in \mathbb{R}^{T \times d_{\text{model}}}$
+be the input. The forward pass is
+
+$$
+Q = X W_Q,
+\qquad
+K = X W_K,
+\qquad
+V = X W_V
+\qquad
+(\text{all } T \times d_k),
+$$
+
+$$
+S' = Q K^{\top} \in \mathbb{R}^{T \times T},
+\qquad
+S = \frac{S'}{\sqrt{d_k}},
+\qquad
+\tilde{S} = \text{mask}(S),
+$$
+
+$$
+A = \operatorname{softmax}(\tilde{S}) \text{ row-wise},
+\qquad
+O = A V \in \mathbb{R}^{T \times d_k}.
+$$
+
+The mask replaces upper-triangular entries with $-\infty$ before softmax, so
+$A_{ij} = 0$ at masked positions and each row of $A$ still sums to $1$. We
+will see that this makes the mask's backward trivial.
+
+### Backward through $O = AV$
+
+This is two matrix multiplies. Given $\mathrm{d}O$, the standard identities
+for $C = AB$ (with shapes that match) give
+
+$$
+\mathrm{d}V = A^{\top} \, \mathrm{d}O,
+\qquad
+\mathrm{d}A = \mathrm{d}O \, V^{\top}.
+$$
+
+Shapes: $\mathrm{d}V$ is $T \times d_k$, $\mathrm{d}A$ is $T \times T$.
+
+### Backward through row-wise softmax
+
+Each row $A_{i:}$ is the softmax of $\tilde S_{i:}$, independent of other rows.
+From section&nbsp;1, the single-row softmax Jacobian is
+
+$$
+\frac{\partial A_{ij}}{\partial \tilde S_{ik}} = A_{ij} (\delta_{jk} - A_{ik}).
+$$
+
+Chaining $\mathrm{d}\tilde S_{ik} = \sum_j \mathrm{d}A_{ij} \cdot \partial A_{ij} / \partial \tilde S_{ik}$:
+
+$$
+\mathrm{d}\tilde S_{ik}
+= \sum_{j=1}^{T} \mathrm{d}A_{ij} A_{ij} (\delta_{jk} - A_{ik})
+= A_{ik} \, \mathrm{d}A_{ik} - A_{ik} \sum_{j=1}^{T} \mathrm{d}A_{ij} A_{ij}
+= A_{ik} \Bigl( \mathrm{d}A_{ik} - \sum_{j} \mathrm{d}A_{ij} A_{ij} \Bigr).
+$$
+
+Vectorize over the row and stack rows back into a matrix. Let
+$\overline{r}_i = \sum_j \mathrm{d}A_{ij} A_{ij}$ be the row-wise inner
+product, broadcast across columns. Then
+
+$$
+\boxed{
+\mathrm{d}\tilde S = A \odot \bigl( \mathrm{d}A - \overline{r} \mathbf{1}^{\top} \bigr).
+}
+$$
+
+This matches `attention.py:75-77`:
+
+```python
+sum_term = np.sum(d_attn * self.attn_weights, axis=-1, keepdims=True)
+d_scores = self.attn_weights * (d_attn - sum_term)
+```
+
+### Backward through the mask
+
+The mask is $\tilde S_{ij} = S_{ij}$ at unmasked positions and $-\infty$
+otherwise. The $-\infty$ entries are constants with respect to $S$, so
+$\partial \tilde S_{ij} / \partial S_{ij} = 1$ at unmasked positions and the
+mask backward would be: zero $\mathrm{d}\tilde S$ at masked positions, copy
+elsewhere.
+
+But from the previous step, $\mathrm{d}\tilde S = A \odot (\ldots)$, and
+$A_{ij} = 0$ at masked positions, so $\mathrm{d}\tilde S$ is already zero
+there. No explicit mask handling is needed in backward.
+
+### Backward through the scale
+
+$S = S' / \sqrt{d_k}$ is a scalar division, so
+
+$$
+\mathrm{d}S' = \frac{\mathrm{d}S}{\sqrt{d_k}} = \frac{\mathrm{d}\tilde S}{\sqrt{d_k}}.
+$$
+
+This is `attention.py:78` (`d_scores /= np.sqrt(self.d_k)`).
+
+### Backward through $S' = Q K^{\top}$
+
+Index form: $S'_{ij} = \sum_l Q_{il} K_{jl}$.
+
+$$
+\frac{\partial S'_{ij}}{\partial Q_{ab}} = \delta_{ia} K_{jb},
+\qquad
+\frac{\partial S'_{ij}}{\partial K_{ab}} = \delta_{ja} Q_{ib}.
+$$
+
+Contract with $\mathrm{d}S'$:
+
+$$
+\mathrm{d}Q_{ab}
+= \sum_{i, j} \mathrm{d}S'_{ij} \delta_{ia} K_{jb}
+= \sum_j \mathrm{d}S'_{aj} K_{jb}
+\;\Longrightarrow\;
+\mathrm{d}Q = \mathrm{d}S' \, K.
+$$
+
+$$
+\mathrm{d}K_{ab}
+= \sum_{i, j} \mathrm{d}S'_{ij} \delta_{ja} Q_{ib}
+= \sum_i \mathrm{d}S'_{ia} Q_{ib}
+\;\Longrightarrow\;
+\mathrm{d}K = (\mathrm{d}S')^{\top} \, Q.
+$$
+
+Both lines match `attention.py:80-81`.
+
+### Backward through the projections
+
+Each of $Q = X W_Q$, $K = X W_K$, $V = X W_V$ is a plain matrix product, with
+the same backward pattern as Linear:
+
+$$
+\mathrm{d}W_Q = X^{\top} \mathrm{d}Q,
+\qquad
+\mathrm{d}W_K = X^{\top} \mathrm{d}K,
+\qquad
+\mathrm{d}W_V = X^{\top} \mathrm{d}V,
+$$
+
+and the three contributions to $\mathrm{d}X$ add up:
+
+$$
+\mathrm{d}X = \mathrm{d}Q \, W_Q^{\top} + \mathrm{d}K \, W_K^{\top} + \mathrm{d}V \, W_V^{\top}.
+$$
+
+This is `attention.py:83-88`. The reshape `x_flat = x.reshape(-1, d_model)`
+just folds the batch and sequence axes together so the same identity applies.
+
+### Numerical check (sketch)
+
+The test instantiates a `SingleHeadAttention(d_model=8, d_k=4)` and verifies
+each of $\mathrm{d}W_Q$, $\mathrm{d}W_K$, $\mathrm{d}W_V$, $\mathrm{d}x$
+against central differences. During the derivation here we also confirmed
+$\mathrm{d}Q$, $\mathrm{d}K$, $\mathrm{d}V$ directly at the pre-projection
+level on $T=4, d_k=3$ random tensors: all three matched numerically with
+relative error below $1.3 \times 10^{-9}$.
