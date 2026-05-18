@@ -9,18 +9,20 @@ matrices in uppercase. Gradients of a scalar loss `L` with respect to a tensor
 `X` are written `dX` (the same shape as `X`). All sums are over indices made
 explicit by the bounds.
 
-## Table of contents
+## Contents
 
-- [1. Softmax and cross-entropy: the combined gradient](#1-softmax-and-cross-entropy-the-combined-gradient)
-- [2. LayerNorm backward](#2-layernorm-backward)
-- [3. Scaled dot-product attention: gradients in matrix form](#3-scaled-dot-product-attention-gradients-in-matrix-form)
-- [4. Multi-head reshape in tensor index notation](#4-multi-head-reshape-in-tensor-index-notation)
-- [5. Adam update rule and bias correction](#5-adam-update-rule-and-bias-correction)
+| # | Section | Implementation | Numerical check |
+|---|---------|----------------|-----------------|
+| 1 | [Softmax and cross-entropy](#1-softmax-and-cross-entropy-the-combined-gradient) | [`linear.py:8-34`](../src/transformer/linear.py#L8-L34) | [`test_linear.py`](../tests/test_linear.py) |
+| 2 | [LayerNorm backward](#2-layernorm-backward) | [`layernorm.py:8-48`](../src/transformer/layernorm.py#L8-L48) | [`test_layernorm.py`](../tests/test_layernorm.py) |
+| 3 | [Attention gradients](#3-scaled-dot-product-attention-gradients-in-matrix-form) | [`attention.py:19-88`](../src/transformer/attention.py#L19-L88) | [`test_attention.py`](../tests/test_attention.py) |
+| 4 | [Multi-head reshape](#4-multi-head-reshape-in-tensor-index-notation) | [`mha.py:10-110`](../src/transformer/mha.py#L10-L110) | [`test_mha.py`](../tests/test_mha.py) |
+| 5 | [Adam + bias correction](#5-adam-update-rule-and-bias-correction) | [`optim.py:8-60`](../src/transformer/optim.py#L8-L60) | [`test_optim.py`](../tests/test_optim.py) |
 
 ## 1. Softmax and cross-entropy: the combined gradient
 
-**Implementation:** `src/transformer/linear.py` (`softmax`, `cross_entropy_loss`).
-**Numerical check:** `tests/test_linear.py::test_softmax_cross_entropy_gradient_matches_numerical`.
+**Implementation:** [`src/transformer/linear.py:8-34`](../src/transformer/linear.py#L8-L34) (`softmax`, `cross_entropy_loss`).
+**Numerical check:** [`tests/test_linear.py::test_softmax_cross_entropy_gradient_matches_numerical`](../tests/test_linear.py).
 
 ### Setup
 
@@ -131,8 +133,8 @@ the threshold.
 
 ## 2. LayerNorm backward
 
-**Implementation:** `src/transformer/layernorm.py`.
-**Numerical check:** `tests/test_layernorm.py::test_layernorm_dx_matches_numerical`
+**Implementation:** [`src/transformer/layernorm.py:8-48`](../src/transformer/layernorm.py#L8-L48) (`LayerNorm`).
+**Numerical check:** [`tests/test_layernorm.py::test_layernorm_dx_matches_numerical`](../tests/test_layernorm.py)
 and `::test_layernorm_dgamma_dbeta_match_numerical`.
 
 This is the most error-prone gradient in the model: $\mu$ and $\sigma$ both
@@ -304,8 +306,8 @@ its numerical counterpart with absolute error $\approx 3.5 \times 10^{-10}$.
 
 ## 3. Scaled dot-product attention: gradients in matrix form
 
-**Implementation:** `src/transformer/attention.py`.
-**Numerical check:** `tests/test_attention.py::test_attention_projection_gradients_match_numerical`
+**Implementation:** [`src/transformer/attention.py:19-88`](../src/transformer/attention.py#L19-L88) (`SingleHeadAttention`).
+**Numerical check:** [`tests/test_attention.py::test_attention_projection_gradients_match_numerical`](../tests/test_attention.py)
 and `::test_attention_dx_matches_numerical`.
 
 The attention block is a stack of five operations, all linear or row-wise.
@@ -479,8 +481,8 @@ relative error below $1.3 \times 10^{-9}$.
 
 ## 4. Multi-head reshape in tensor index notation
 
-**Implementation:** `src/transformer/mha.py`.
-**Numerical check:** `tests/test_mha.py::test_mha_projection_gradients_match_numerical`,
+**Implementation:** [`src/transformer/mha.py:10-110`](../src/transformer/mha.py#L10-L110) (`MultiHeadAttention`).
+**Numerical check:** [`tests/test_mha.py::test_mha_projection_gradients_match_numerical`](../tests/test_mha.py),
 `::test_mha_dx_matches_numerical`,
 `::test_mha_attention_weights_respect_causal_mask`.
 
@@ -620,8 +622,8 @@ result is identical to running $H$ independent single-head backwards.
 
 ## 5. Adam update rule and bias correction
 
-**Implementation:** `src/transformer/optim.py`.
-**Numerical check:** `tests/test_optim.py::test_adam_converges_on_quadratic`,
+**Implementation:** [`src/transformer/optim.py:8-60`](../src/transformer/optim.py#L8-L60) (`Adam`, with `step` at `optim.py:39-60`).
+**Numerical check:** [`tests/test_optim.py::test_adam_converges_on_quadratic`](../tests/test_optim.py),
 `::test_adam_bias_correction_first_step_matches_grad`.
 
 Adam (Kingma & Ba, 2014) maintains two running averages per parameter, $m_t$
