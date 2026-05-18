@@ -15,6 +15,7 @@ explicit by the bounds.
 - [2. LayerNorm backward](#2-layernorm-backward)
 - [3. Scaled dot-product attention: gradients in matrix form](#3-scaled-dot-product-attention-gradients-in-matrix-form)
 - [4. Multi-head reshape in tensor index notation](#4-multi-head-reshape-in-tensor-index-notation)
+- [5. Adam update rule and bias correction](#5-adam-update-rule-and-bias-correction)
 
 ## 1. Softmax and cross-entropy: the combined gradient
 
@@ -616,3 +617,134 @@ Because the factorization above is exact, the matrix-form code does not loop
 over heads: each step ($A V$, the softmax jacobian, $QK^{\top}$, etc.) is
 done with a 4D matmul that contracts over the appropriate axis, and the
 result is identical to running $H$ independent single-head backwards.
+
+## 5. Adam update rule and bias correction
+
+**Implementation:** `src/transformer/optim.py`.
+**Numerical check:** `tests/test_optim.py::test_adam_converges_on_quadratic`,
+`::test_adam_bias_correction_first_step_matches_grad`.
+
+Adam (Kingma & Ba, 2014) maintains two running averages per parameter, $m_t$
+for the gradient and $v_t$ for the squared gradient. Initialising both to
+zero introduces a transient bias, and the "bias correction" step is the fix.
+This section derives where the bias comes from and why dividing by
+$1 - \beta^{t}$ removes it exactly.
+
+### The update rule
+
+For each step $t \geq 1$ with gradient $g_t$:
+
+$$
+m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t,
+\qquad
+v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^{2},
+$$
+
+with $m_0 = 0$ and $v_0 = 0$. Then bias-correct,
+
+$$
+\hat{m}_t = \frac{m_t}{1 - \beta_1^{t}},
+\qquad
+\hat{v}_t = \frac{v_t}{1 - \beta_2^{t}},
+$$
+
+and update,
+
+$$
+\theta_t = \theta_{t-1} - \alpha \cdot \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon}.
+$$
+
+In `optim.py` (`step` method) this is one loop over parameters, applying
+exactly these five lines per tensor.
+
+### Why bias correction is needed
+
+Unroll the recursion for $m_t$ given $m_0 = 0$:
+
+$$
+m_t = (1 - \beta_1) \sum_{k=1}^{t} \beta_1^{t-k} g_k.
+$$
+
+Take expectations under the assumption that gradients have a stationary mean
+$\mathbb{E}[g_k] = \mu$ (this is the "constant gradient" regime that approximates
+early training). Pull the expectation through the linear combination:
+
+$$
+\mathbb{E}[m_t]
+= (1 - \beta_1) \mu \sum_{k=1}^{t} \beta_1^{t-k}
+= (1 - \beta_1) \mu \cdot \frac{1 - \beta_1^{t}}{1 - \beta_1}
+= \mu \cdot (1 - \beta_1^{t}).
+$$
+
+So $m_t$ underestimates $\mu$ by exactly the factor $(1 - \beta_1^{t})$, and
+the underestimate is worst at small $t$ (when $\beta_1^{t}$ is close to $1$).
+Dividing by $1 - \beta_1^{t}$ gives an unbiased estimator,
+
+$$
+\mathbb{E}[\hat{m}_t] = \mu.
+$$
+
+The same argument applies to $v_t$ as an estimator of $\mathbb{E}[g^{2}]$:
+unbiased estimator is $\hat{v}_t = v_t / (1 - \beta_2^{t})$.
+
+Direct verification (during the derivation of this section): with $\beta_1 =
+0.9, \mu = 0.7$ and $m_0 = 0$, the recursive value of $m_t$ matches
+$(1 - \beta_1^{t}) \mu$ exactly for $t = 1, \ldots, 7$, and the
+bias-corrected $\hat{m}_t$ is the constant $0.7$ at every step.
+
+### The first-step "sign of the gradient" property
+
+Plugging $t = 1$ into the formulas with $m_0 = v_0 = 0$:
+
+$$
+m_1 = (1 - \beta_1) g_1,
+\qquad
+v_1 = (1 - \beta_2) g_1^{2},
+$$
+
+$$
+\hat{m}_1 = g_1,
+\qquad
+\hat{v}_1 = g_1^{2},
+$$
+
+$$
+\theta_1 - \theta_0 = -\alpha \cdot \frac{g_1}{|g_1| + \varepsilon}
+\approx -\alpha \cdot \operatorname{sign}(g_1) \quad \text{when } \varepsilon \ll |g_1|.
+$$
+
+So the first Adam step has magnitude approximately $\alpha$ in every
+coordinate, regardless of the gradient's magnitude. This is the property
+that lets Adam tolerate poorly scaled gradients near initialisation. The
+test `test_adam_bias_correction_first_step_matches_grad` confirms this
+exactly with $\varepsilon = 0$.
+
+### Epsilon placement
+
+The implementation in `optim.py` writes
+
+$$
+\frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon}
+$$
+
+(i.e., $\varepsilon$ is added outside the square root). This is the PyTorch
+convention from the original paper. An alternative,
+$\hat{m}_t / \sqrt{\hat{v}_t + \varepsilon}$ (TensorFlow's older convention),
+is numerically very similar but technically different and not used here.
+
+### Gradient clipping
+
+`Adam.step` also applies per-element clipping to $\lvert \mathrm{grad} \rvert
+\leq 1$ before forming $m_t, v_t$, controlled by the `clip` constructor
+parameter. This is not part of Adam proper; it is a defensive measure to
+prevent occasional large gradients from poisoning the EMA estimates. It can
+be disabled (`clip=None`) and is in fact disabled in the optimiser
+convergence test.
+
+### Numerical check (sketch)
+
+`test_adam_converges_on_quadratic` minimises $f(w) = \tfrac{1}{2} \lVert w -
+w^\star \rVert^{2}$ from $w_0 = 0$ using Adam with $\alpha = 0.1$,
+$\beta_1 = 0.9$, $\beta_2 = 0.999$, $\varepsilon = 10^{-8}$, no clipping. After
+500 steps the loss is below $10^{-6}$ and $w$ matches $w^\star$ to within
+$10^{-3}$.
