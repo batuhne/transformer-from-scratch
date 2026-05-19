@@ -42,6 +42,21 @@ def load_corpus(path: str | Path) -> tuple[str, CharVocab, np.ndarray]:
     return text, vocab, data
 
 
+def split_data(
+    data: np.ndarray,
+    val_fraction: float = 0.1,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Contiguous train/val split. Val is the last `val_fraction` of the corpus.
+    The split is contiguous (no shuffling) because adjacent characters are
+    statistically dependent: shuffling would leak training context into the
+    validation set and inflate val accuracy.
+    """
+    if not 0.0 < val_fraction < 1.0:
+        raise ValueError(f"val_fraction must be in (0, 1), got {val_fraction}")
+    n_train = int(len(data) * (1.0 - val_fraction))
+    return data[:n_train], data[n_train:]
+
+
 def get_batch(
     data: np.ndarray,
     batch_size: int,

@@ -1,10 +1,11 @@
-"""Tests for char vocab and batch sampling."""
+"""Tests for char vocab, batch sampling, and train/val split."""
 
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from transformer.data import CharVocab, get_batch
+from transformer.data import CharVocab, get_batch, split_data
 
 
 def test_charvocab_roundtrip() -> None:
@@ -28,3 +29,19 @@ def test_get_batch_shapes_and_target_shift() -> None:
     assert y.shape == (4, 8)
     # Each y row should be x row shifted by one position.
     assert np.array_equal(y[:, :-1], x[:, 1:])
+
+
+def test_split_data_contiguous_with_no_overlap() -> None:
+    data = np.arange(100, dtype=np.int64)
+    train_data, val_data = split_data(data, val_fraction=0.1)
+    assert len(train_data) == 90
+    assert len(val_data) == 10
+    assert train_data[-1] + 1 == val_data[0]
+    assert np.array_equal(np.concatenate([train_data, val_data]), data)
+
+
+@pytest.mark.parametrize("bad", [0.0, 1.0, -0.1, 1.5])
+def test_split_data_rejects_invalid_fraction(bad: float) -> None:
+    data = np.arange(10, dtype=np.int64)
+    with pytest.raises(ValueError):
+        split_data(data, val_fraction=bad)
