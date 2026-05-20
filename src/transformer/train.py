@@ -67,6 +67,7 @@ def train(
     optimizer = Adam(model.params(), lr=config.lr)
     history = TrainHistory()
     t0 = time.time()
+    model.set_training(True)
 
     for step in range(config.n_steps):
         x, y = get_batch(train_data, config.batch_size, config.seq_len, rng=rng)
@@ -86,6 +87,7 @@ def train(
             print(f"step {step1:5d}/{config.n_steps} | loss {avg:.4f} | {sps:.1f} steps/s")
 
         if val_data is not None and config.eval_every and step1 % config.eval_every == 0:
+            model.set_training(False)
             vl = eval_loss(
                 model,
                 val_data,
@@ -94,6 +96,7 @@ def train(
                 config.eval_batches,
                 rng,
             )
+            model.set_training(True)
             history.val_loss.append((step1, vl))
             if config.log_every:
                 print(f"step {step1:5d}/{config.n_steps} | val_loss {vl:.4f}")

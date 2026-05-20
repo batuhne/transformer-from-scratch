@@ -6,6 +6,7 @@ import numpy as np
 
 from transformer.attention import causal_mask
 from transformer.block import TransformerBlock
+from transformer.dropout import Dropout
 from transformer.embedding import Embedding, get_positional_encoding
 from transformer.layernorm import LayerNorm
 from transformer.linear import Linear
@@ -22,6 +23,7 @@ class Transformer:
         d_ff: int,
         n_layers: int,
         max_seq_len: int,
+        dropout: float = 0.0,
     ) -> None:
         self.vocab_size = vocab_size
         self.d_model = d_model
@@ -29,7 +31,9 @@ class Transformer:
 
         self.embedding = Embedding(vocab_size, d_model)
         self.pe = get_positional_encoding(max_seq_len, d_model)
-        self.blocks = [TransformerBlock(d_model, n_heads, d_ff) for _ in range(n_layers)]
+        self.blocks = [
+            TransformerBlock(d_model, n_heads, d_ff, dropout=dropout) for _ in range(n_layers)
+        ]
         self.ln_final = LayerNorm(d_model)
         self.output_proj = Linear(d_model, vocab_size)
 
@@ -66,3 +70,11 @@ class Transformer:
 
     def count_params(self) -> int:
         return sum(getattr(obj, name).size for obj, name in self.params())
+
+    def dropouts(self) -> list[Dropout]:
+        return [d for block in self.blocks for d in block.dropouts()]
+
+    def set_training(self, training: bool) -> None:
+        """Toggle every Dropout in the model. Disable for val/inference."""
+        for d in self.dropouts():
+            d.training = training

@@ -4,30 +4,34 @@ from __future__ import annotations
 
 import numpy as np
 
+from transformer.dropout import Dropout
 from transformer.ffn import FeedForward
 from transformer.layernorm import LayerNorm
 from transformer.mha import MultiHeadAttention
 
 
 class TransformerBlock:
-    """Pre-LN block: y = x + MHA(LN(x)); z = y + FFN(LN(y))."""
+    """Pre-LN block: y = x + drop(MHA(LN(x))); z = y + drop(FFN(LN(y)))."""
 
-    def __init__(self, d_model: int, n_heads: int, d_ff: int) -> None:
+    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.0) -> None:
         self.ln1 = LayerNorm(d_model)
-        self.mha = MultiHeadAttention(d_model, n_heads)
+        self.mha = MultiHeadAttention(d_model, n_heads, dropout=dropout)
+        self.drop1 = Dropout(dropout)
         self.ln2 = LayerNorm(d_model)
         self.ffn = FeedForward(d_model, d_ff)
+        self.drop2 = Dropout(dropout)
 
     def forward(self, x: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:
-        x = x + self.mha.forward(self.ln1.forward(x), mask=mask)
-        x = x + self.ffn.forward(self.ln2.forward(x))
+        x = x + self.drop1.forward(self.mha.forward(self.ln1.forward(x), mask=mask))
+        x = x + self.drop2.forward(self.ffn.forward(self.ln2.forward(x)))
         return x
 
     def backward(self, dout: np.ndarray) -> np.ndarray:
         # FFN sub-layer: dout splits between residual path and sublayer path.
-        d_after_attn = dout + self.ln2.backward(self.ffn.backward(dout))
+        d_after_attn = dout + self.ln2.backward(self.ffn.backward(self.drop2.backward(dout)))
         # MHA sub-layer: same split.
-        return d_after_attn + self.ln1.backward(self.mha.backward(d_after_attn))
+        d_mha = self.mha.backward(self.drop1.backward(d_after_attn))
+        return d_after_attn + self.ln1.backward(d_mha)
 
     def params(self) -> list[tuple[object, str]]:
         return [
@@ -41,3 +45,6 @@ class TransformerBlock:
             (self.ln2, "beta"),
             *self.ffn.params(),
         ]
+
+    def dropouts(self) -> list[Dropout]:
+        return [self.mha.attn_dropout, self.drop1, self.drop2]

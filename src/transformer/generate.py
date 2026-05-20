@@ -27,6 +27,7 @@ def generate(
     if temperature <= 0:
         raise ValueError("temperature must be positive")
 
+    model.set_training(False)
     indices = list(vocab.encode(start))
 
     for _ in range(max_new_tokens):

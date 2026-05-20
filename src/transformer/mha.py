@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from transformer.dropout import Dropout
 from transformer.linear import softmax
 
 
@@ -14,7 +15,7 @@ class MultiHeadAttention:
     // n_heads, then concatenates and projects with W_O.
     """
 
-    def __init__(self, d_model: int, n_heads: int) -> None:
+    def __init__(self, d_model: int, n_heads: int, dropout: float = 0.0) -> None:
         assert d_model % n_heads == 0, "d_model must be divisible by n_heads"
         self.d_model = d_model
         self.n_heads = n_heads
@@ -26,6 +27,8 @@ class MultiHeadAttention:
         self.W_V = np.random.randn(d_model, d_model) * scale
         self.W_O = np.random.randn(d_model, d_model) * scale
 
+        self.attn_dropout = Dropout(dropout)
+
         self.dW_Q: np.ndarray | None = None
         self.dW_K: np.ndarray | None = None
         self.dW_V: np.ndarray | None = None
@@ -36,6 +39,7 @@ class MultiHeadAttention:
         self.K: np.ndarray | None = None
         self.V: np.ndarray | None = None
         self.attn_weights: np.ndarray | None = None
+        self.attn_post: np.ndarray | None = None
         self.attn_output: np.ndarray | None = None
 
     def _split_heads(self, x: np.ndarray) -> np.ndarray:
@@ -69,7 +73,8 @@ class MultiHeadAttention:
             scores = np.where(mask, -1e9, scores)
 
         self.attn_weights = softmax(scores)
-        attn_out = self.attn_weights @ self.V
+        self.attn_post = self.attn_dropout.forward(self.attn_weights)
+        attn_out = self.attn_post @ self.V
         self.attn_output = self._merge_heads(attn_out)
         return self.attn_output @ self.W_O
 
@@ -88,8 +93,10 @@ class MultiHeadAttention:
         d_attn_output = dout @ self.W_O.T
         d_attn_out = self._split_heads(d_attn_output)
 
-        d_attn = d_attn_out @ self.V.transpose(0, 1, 3, 2)
-        dV = self.attn_weights.transpose(0, 1, 3, 2) @ d_attn_out
+        d_attn_post = d_attn_out @ self.V.transpose(0, 1, 3, 2)
+        dV = self.attn_post.transpose(0, 1, 3, 2) @ d_attn_out
+
+        d_attn = self.attn_dropout.backward(d_attn_post)
 
         sum_term = np.sum(d_attn * self.attn_weights, axis=-1, keepdims=True)
         d_scores = self.attn_weights * (d_attn - sum_term)
