@@ -46,11 +46,7 @@ def split_data(
     data: np.ndarray,
     val_fraction: float = 0.1,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Contiguous train/val split. Val is the last `val_fraction` of the corpus.
-    The split is contiguous (no shuffling) because adjacent characters are
-    statistically dependent: shuffling would leak training context into the
-    validation set and inflate val accuracy.
-    """
+    """Contiguous (not shuffled) train/val split; val is the tail of the corpus."""
     if not 0.0 < val_fraction < 1.0:
         raise ValueError(f"val_fraction must be in (0, 1), got {val_fraction}")
     n_train = int(len(data) * (1.0 - val_fraction))
@@ -63,12 +59,7 @@ def get_batch(
     seq_len: int,
     rng: np.random.Generator | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Sample `batch_size` contiguous windows of length `seq_len` from `data`.
-
-    Returns:
-        x: shape (batch_size, seq_len) input tokens.
-        y: shape (batch_size, seq_len) targets shifted by one position.
-    """
+    """Random windows of length `seq_len`; returns (x, y=x shifted by 1)."""
     if rng is None:
         rng = np.random.default_rng()
     max_start = len(data) - seq_len - 1

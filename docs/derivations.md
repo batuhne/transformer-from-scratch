@@ -18,6 +18,9 @@ explicit by the bounds.
 | 3 | [Attention gradients](#3-scaled-dot-product-attention-gradients-in-matrix-form) | [`attention.py:19-88`](../src/transformer/attention.py#L19-L88) | [`test_attention.py`](../tests/test_attention.py) |
 | 4 | [Multi-head reshape](#4-multi-head-reshape-in-tensor-index-notation) | [`mha.py:10-110`](../src/transformer/mha.py#L10-L110) | [`test_mha.py`](../tests/test_mha.py) |
 | 5 | [Adam + bias correction](#5-adam-update-rule-and-bias-correction) | [`optim.py:8-60`](../src/transformer/optim.py#L8-L60) | [`test_optim.py`](../tests/test_optim.py) |
+| 6 | [LR schedules: warmup + cosine](#6-lr-schedules-warmup-and-cosine-decay) | [`schedule.py`](../src/transformer/schedule.py) | [`test_schedule.py`](../tests/test_schedule.py) |
+| 7 | [Inverted dropout](#7-inverted-dropout-expectation-and-gradient) | [`dropout.py`](../src/transformer/dropout.py) | [`test_dropout.py`](../tests/test_dropout.py) |
+| 8 | [Weight tying](#8-weight-tying-combining-two-gradient-contributions) | [`model.py`](../src/transformer/model.py) | [`test_model.py`](../tests/test_model.py) |
 
 ## 1. Softmax and cross-entropy: the combined gradient
 
@@ -783,3 +786,227 @@ w^\star \rVert^{2}$ from $w_0 = 0$ using Adam with $\alpha = 0.1$,
 $\beta_1 = 0.9$, $\beta_2 = 0.999$, $\varepsilon = 10^{-8}$, no clipping. After
 500 steps the loss is below $10^{-6}$ and $w$ matches $w^\star$ to within
 $10^{-3}$.
+
+## 6. LR schedules: warmup and cosine decay
+
+**Implementation:** [`src/transformer/schedule.py`](../src/transformer/schedule.py) (`cosine_warmup_lr`).
+**Numerical check:** [`tests/test_schedule.py`](../tests/test_schedule.py).
+
+The training loop uses a two-phase learning-rate schedule: linear warmup
+followed by cosine decay. Both phases are individually trivial; what makes
+them worth a section is *why* this specific shape interacts well with
+Adam, and the boundary smoothness property of the cosine half-period.
+
+### The schedule
+
+For step $t = 1, 2, \ldots$ with base rate $\alpha$, warmup length $T_w$,
+total length $T$, and floor $\alpha_{\min}$:
+
+$$
+\alpha_t =
+\begin{cases}
+\alpha \cdot \dfrac{t}{T_w}                                    & 1 \leq t \leq T_w, \\[6pt]
+\alpha_{\min} + \tfrac{1}{2}(\alpha - \alpha_{\min})
+  \bigl(1 + \cos(\pi \, p_t)\bigr)                              & T_w < t < T, \\[6pt]
+\alpha_{\min}                                                  & t \geq T,
+\end{cases}
+\qquad
+p_t = \frac{t - T_w}{T - T_w}.
+$$
+
+At $t = T_w$ we have $p_t = 0$ and $\cos 0 = 1$, so $\alpha_{T_w} = \alpha$:
+the warmup hands off to the cosine phase at the peak value, continuously.
+At $t = T$ we have $p_t = 1$ and $\cos \pi = -1$, so $\alpha_T = \alpha_{\min}$.
+
+### Why warmup, specifically with Adam
+
+From section&nbsp;5, Adam's first step has the property
+
+$$
+\theta_1 - \theta_0
+= -\alpha \cdot \frac{g_1}{\lvert g_1 \rvert + \varepsilon}
+\approx -\alpha \cdot \operatorname{sign}(g_1).
+$$
+
+The magnitude of this update is approximately $\alpha$ in every coordinate,
+*independent* of the actual gradient scale. That is desirable in steady
+state (it makes Adam robust to poorly scaled gradients) but dangerous at
+initialisation: $m_t$ and $v_t$ are zero-biased early on, and the
+direction encoded in $\operatorname{sign}(g_1)$ is informed only by a
+single mini-batch's gradient. Taking $T_w$ updates at reduced rates lets
+the EMA estimates accumulate signal before steps reach full size. For SGD,
+where the update magnitude scales with $\lvert g \rvert$, this matters less.
+
+### Cosine boundary smoothness
+
+Differentiate the cosine branch with respect to $t$:
+
+$$
+\frac{\mathrm{d}\alpha_t}{\mathrm{d}t}
+= -\frac{\pi (\alpha - \alpha_{\min})}{2(T - T_w)}
+  \sin(\pi \, p_t).
+$$
+
+Because $\sin 0 = \sin \pi = 0$, this derivative vanishes at *both*
+endpoints: the schedule is $C^1$-continuous when joining warmup at $t = T_w$
+(if we set the warmup derivative to match) and lands at $\alpha_{\min}$
+with zero slope at $t = T$. Linear or step schedules have a discontinuity
+in $\alpha_t$ itself or its derivative; cosine has neither, which is the
+empirical motivation for using it.
+
+### Numerical check (sketch)
+
+The schedule is a pure scalar function, so the test file pins five
+checkpoints rather than a gradient: the first warmup step gives
+$\alpha / T_w$, the warmup boundary $t = T_w$ recovers $\alpha$, the
+midpoint $p_t = 1/2$ gives $\alpha_{\min} + \tfrac{1}{2}(\alpha - \alpha_{\min})$
+(since $\cos(\pi/2) = 0$), $t = T$ gives $\alpha_{\min}$, and $t > T$ is
+clamped to $\alpha_{\min}$.
+
+## 7. Inverted dropout: expectation and gradient
+
+**Implementation:** [`src/transformer/dropout.py`](../src/transformer/dropout.py) (`Dropout`).
+**Numerical check:** [`tests/test_dropout.py`](../tests/test_dropout.py).
+
+Dropout is a single elementwise multiplication; the value of writing it out
+is to see *why* the $1/(1-p)$ scale is chosen and why backward needs no
+extra cache beyond the forward mask.
+
+### Forward
+
+In train mode, draw a Bernoulli mask $b \in \{0, 1\}^{D}$ with
+$\Pr(b_i = 1) = 1 - p$, then form the scaled mask
+
+$$
+m_i = \frac{b_i}{1 - p},
+\qquad
+y_i = m_i \, x_i.
+$$
+
+In eval mode, $y = x$ identically: no mask is sampled, nothing is scaled.
+
+### Why the $1/(1-p)$ scale (expectation preservation)
+
+Take the expectation over the Bernoulli draw, treating $x_i$ as fixed:
+
+$$
+\mathbb{E}[m_i] = \frac{\mathbb{E}[b_i]}{1 - p} = \frac{1 - p}{1 - p} = 1,
+\qquad
+\mathbb{E}[y_i] = \mathbb{E}[m_i] \, x_i = x_i.
+$$
+
+So the *expected* train-time activation equals the eval-time activation.
+That is what justifies running inference with the unmodified network: no
+test-time rescaling needed, because at train time we already absorbed the
+correction. This is the "inverted dropout" convention.
+
+The alternative (the original Hinton 2012 form) uses $m_i = b_i$ at train
+time, then scales activations by $1-p$ at eval. The two conventions are
+mathematically equivalent on expectation; inverted dropout is preferred
+because it leaves inference untouched.
+
+### Backward
+
+Since $y_i = m_i x_i$ with $m_i$ a constant during the backward pass (the
+same draw used in forward), $\partial y_i / \partial x_i = m_i$, so
+
+$$
+\mathrm{d}x_i = m_i \, \mathrm{d}y_i.
+$$
+
+This is `dropout.py`'s one-line backward. No additional cache is needed
+because forward already stored $m$. In eval mode $m$ is absent, and
+backward is identity.
+
+### Numerical check (sketch)
+
+`test_dropout_preserves_expectation` fills a $500 \times 500$ tensor with
+$x = 7$ and applies dropout with $p = 0.3$. Empirical mean of the output
+matches $7$ to within $0.05$, confirming $\mathbb{E}[m \odot x] = x$
+across the realised mask.
+
+## 8. Weight tying: combining two gradient contributions
+
+**Implementation:** [`src/transformer/model.py`](../src/transformer/model.py) (`Transformer`, `tie_weights=True`).
+**Numerical check:** [`tests/test_model.py::test_tie_weights_combined_gradient_matches_numerical`](../tests/test_model.py).
+
+Weight tying shares storage between the embedding matrix and the output
+projection: $W_{\text{out}} = W_{\text{emb}}^{\top}$, pointing at the same
+buffer. The loss $L$ depends on $W$ through *two* paths, so the gradient
+$\nabla_W L$ is the sum of the two contributions. This section spells the
+sum out and confirms it numerically.
+
+### Setup
+
+Let $W \in \mathbb{R}^{V \times D}$ be the shared parameter ($V$ vocab
+size, $D$ model width). The model uses it twice:
+
+$$
+\text{(1) embedding lookup: } \quad E_{b, t, :} = W_{\text{idx}(b, t), :},
+$$
+
+$$
+\text{(2) output projection: } \quad
+\text{logits}_{b, t, :} = X^{\text{final}}_{b, t, :} \, W^{\top} + c,
+$$
+
+where $X^{\text{final}}$ is the hidden state after the final LayerNorm and
+$c$ is the output bias (a separate parameter, unaffected by tying).
+
+### Gradient from each path
+
+**Embedding path.** Only one row of $W$ is touched per token, so the
+gradient is a sparse accumulation:
+
+$$
+(\mathrm{d}W_{\text{emb}})_{i, :} = \sum_{(b, t) : \text{idx}(b, t) = i} (\mathrm{d}E)_{b, t, :}.
+$$
+
+In code this is `np.add.at(dW, indices, dE)`. (Buffered `dW[indices] += dE`
+would double-count when the same index appears more than once in a
+batch.)
+
+**Output projection path.** $\text{logits} = X W^{\top} + c$ is a plain
+Linear with input $X$ and weight $W^{\top}$. Using the Linear backward
+identity from section&nbsp;3 (transposing for our orientation):
+
+$$
+\mathrm{d}W_{\text{out}} = (\mathrm{d}\,\text{logits})^{\top} \, X^{\text{final}}
+\in \mathbb{R}^{V \times D}.
+$$
+
+This is the gradient w.r.t. $W^{\top}$ reshaped as a $V \times D$ matrix,
+matching $W$'s orientation directly. (In `Linear.backward` the stored
+$\mathrm{d}W$ is in the $D \times V$ orientation, so we transpose.)
+
+### Combining
+
+Total derivative of $L$ with respect to the shared $W$ is the sum:
+
+$$
+\boxed{
+\nabla_W L = \mathrm{d}W_{\text{emb}} + (\mathrm{d}W_{\text{out}})^{\top}.
+}
+$$
+
+This is just the chain rule applied twice: $L$ depends on $W$ through both
+paths, and the partial derivatives along each path add (multivariate
+chain rule, independent paths).
+
+In `model.py`'s `backward`, after the normal pass populates
+`embedding.dW` and `output_proj.dW`, one line folds them:
+
+```python
+if self.tie_weights:
+    self.embedding.dW += self.output_proj.dW.T
+```
+
+The Adam list `params()` then exposes only `(embedding, "W")`, so the
+optimiser updates the shared buffer once with the combined gradient.
+
+### Numerical check (sketch)
+
+`test_tie_weights_combined_gradient_matches_numerical` runs forward,
+backward on a tied model, reads the combined `embedding.dW`, and matches
+it against the central-difference derivative of the loss w.r.t. the
+shared buffer ($V = 5, D = 4$). Relative error stays below $10^{-5}$.

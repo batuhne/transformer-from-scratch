@@ -17,11 +17,7 @@ def generate(
     temperature: float = 0.8,
     rng: np.random.Generator | None = None,
 ) -> str:
-    """Generate text one character at a time, feeding samples back as context.
-
-    Context is truncated to `model.max_seq_len` so positional encoding stays
-    valid. Use `temperature` < 1 to sharpen, > 1 to flatten the distribution.
-    """
+    """Autoregressive char sampling; context truncated to model.max_seq_len."""
     if rng is None:
         rng = np.random.default_rng()
     if temperature <= 0:

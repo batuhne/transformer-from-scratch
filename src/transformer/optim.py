@@ -6,23 +6,7 @@ import numpy as np
 
 
 class Adam:
-    """Adam (Kingma & Ba, 2014) with AdamW-style decoupled weight decay.
-
-    Operates on a flat list of (object, param_name) pairs; reads the gradient
-    from `obj.d<name>` and writes the updated value back to `obj.<name>`.
-
-    `max_norm` enables global-norm gradient clipping: if the total L2 norm of
-    the concatenated gradient vector exceeds `max_norm`, every gradient is
-    scaled by `max_norm / total_norm` before forming the EMA estimates. This
-    preserves the gradient direction; per-element clipping does not.
-
-    `weight_decay > 0` switches the optimiser into AdamW: the update becomes
-    `theta -= lr * (m_hat / (sqrt(v_hat) + eps) + wd * theta)`, decoupled from
-    the gradient (so wd does not get baked into the EMA estimates).  Decay is
-    applied only to 2D parameters (weight matrices); 1D parameters (biases,
-    LayerNorm gamma/beta) are left untouched, matching the GPT-style
-    convention.
-    """
+    """Adam with optional global-norm clip and AdamW decoupled weight decay."""
 
     def __init__(
         self,
@@ -51,7 +35,6 @@ class Adam:
             self.v.append(np.zeros_like(p))
 
     def _global_scale(self) -> float:
-        """Return the scalar to multiply every grad by for global-norm clipping."""
         if self.max_norm is None:
             return 1.0
         total_sq = 0.0
@@ -65,7 +48,6 @@ class Adam:
         return self.max_norm / (total_norm + 1e-6)
 
     def step(self) -> None:
-        """Apply one update across all registered parameters."""
         self.t += 1
         bc1 = 1.0 - self.beta1**self.t
         bc2 = 1.0 - self.beta2**self.t
@@ -87,8 +69,6 @@ class Adam:
             param = getattr(obj, name)
             update = self.lr * m_hat / (np.sqrt(v_hat) + self.eps)
             if self.weight_decay > 0.0 and param.ndim >= 2:
-                # AdamW: decay uses the param's value AT THE START of the step,
-                # which is the current value before this in-place subtraction.
                 update = update + self.lr * self.weight_decay * param
             param -= update
             setattr(obj, name, param)

@@ -6,13 +6,7 @@ import numpy as np
 
 
 class Dropout:
-    """Inverted dropout: in train mode, zero each element with probability `p`
-    and scale survivors by `1/(1-p)` so expected activation is unchanged.
-    In eval mode (or with `p == 0`), forward and backward are identity.
-
-    The scaling lets inference run with the unmodified weights: no rescaling
-    at test time is needed, which is the standard GPT-style convention.
-    """
+    """Inverted dropout: zero with prob p, survivors scaled by 1/(1-p)."""
 
     def __init__(self, p: float = 0.0) -> None:
         if not 0.0 <= p < 1.0:

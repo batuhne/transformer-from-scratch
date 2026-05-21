@@ -6,12 +6,7 @@ import numpy as np
 
 
 class LayerNorm:
-    """Normalize across features with learnable scale and shift.
-
-        y = gamma * (x - mean) / sqrt(var + eps) + beta
-
-    Statistics are computed per-token over the d_model axis.
-    """
+    """Per-token feature normalization with learnable gamma, beta."""
 
     def __init__(self, d_model: int, eps: float = 1e-5) -> None:
         self.gamma = np.ones(d_model)

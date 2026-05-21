@@ -8,10 +8,7 @@ from transformer.linear import softmax
 
 
 def causal_mask(seq_len: int) -> np.ndarray:
-    """Upper-triangular boolean mask, True at positions to block.
-
-    Returns array of shape (1, seq_len, seq_len) so it broadcasts over batch.
-    """
+    """Upper-triangular bool mask of shape (1, T, T); True blocks the position."""
     mask = np.triu(np.ones((seq_len, seq_len), dtype=bool), k=1)
     return mask[np.newaxis, :, :]
 
@@ -37,15 +34,6 @@ class SingleHeadAttention:
         self.attn_weights: np.ndarray | None = None
 
     def forward(self, x: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:
-        """Forward pass.
-
-        Args:
-            x: shape (B, T, d_model).
-            mask: bool array broadcastable to (B, T, T); True blocks the entry.
-
-        Returns:
-            Output of shape (B, T, d_k).
-        """
         self.x = x
         self.Q = x @ self.W_Q
         self.K = x @ self.W_K
@@ -59,14 +47,6 @@ class SingleHeadAttention:
         return self.attn_weights @ self.V
 
     def backward(self, dout: np.ndarray) -> np.ndarray:
-        """Backward pass.
-
-        Args:
-            dout: gradient w.r.t. output, shape (B, T, d_k).
-
-        Returns:
-            Gradient w.r.t. input x, shape (B, T, d_model).
-        """
         d_k = dout.shape[-1]
 
         d_attn = dout @ self.V.transpose(0, 2, 1)

@@ -11,6 +11,7 @@ from transformer.data import get_batch
 from transformer.linear import cross_entropy_loss
 from transformer.model import Transformer
 from transformer.optim import Adam
+from transformer.schedule import cosine_warmup_lr
 
 
 @dataclass
@@ -20,6 +21,8 @@ class TrainConfig:
     seq_len: int = 32
     lr: float = 1e-3
     weight_decay: float = 0.0
+    warmup_steps: int = 0
+    min_lr_ratio: float = 1.0
     log_every: int = 200
     eval_every: int = 500
     eval_batches: int = 20
@@ -69,8 +72,14 @@ def train(
     history = TrainHistory()
     t0 = time.time()
     model.set_training(True)
+    use_schedule = config.warmup_steps > 0 or config.min_lr_ratio < 1.0
+    min_lr = config.lr * config.min_lr_ratio
 
     for step in range(config.n_steps):
+        if use_schedule:
+            optimizer.lr = cosine_warmup_lr(
+                step + 1, config.lr, config.warmup_steps, config.n_steps, min_lr
+            )
         x, y = get_batch(train_data, config.batch_size, config.seq_len, rng=rng)
 
         logits = model.forward(x)

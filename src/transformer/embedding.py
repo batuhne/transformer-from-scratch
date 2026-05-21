@@ -20,19 +20,13 @@ class Embedding:
         return self.W[indices]
 
     def backward(self, dout: np.ndarray) -> None:
-        """Accumulate gradient into self.dW.
-
-        np.add.at handles repeated indices correctly, unlike buffered +=.
-        """
+        # np.add.at handles repeated indices unbuffered (regular += would not).
         self.dW = np.zeros_like(self.W)
         np.add.at(self.dW, self.indices, dout)
 
 
 def get_positional_encoding(max_seq_len: int, d_model: int) -> np.ndarray:
-    """Fixed sinusoidal positional encoding from Vaswani et al.
-
-    Returns array of shape (max_seq_len, d_model).
-    """
+    """Fixed sinusoidal positional encoding (Vaswani et al., 2017)."""
     pe = np.zeros((max_seq_len, d_model))
     position = np.arange(max_seq_len)[:, np.newaxis]
     div_term = np.exp(np.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))

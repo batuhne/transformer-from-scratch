@@ -15,15 +15,7 @@ def cross_entropy_loss(
     logits: np.ndarray,
     targets: np.ndarray,
 ) -> tuple[float, np.ndarray]:
-    """Mean cross-entropy with the combined softmax gradient.
-
-    Args:
-        logits: shape (N, C) raw scores.
-        targets: shape (N,) integer class labels.
-
-    Returns:
-        Tuple of (mean loss, gradient w.r.t. logits).
-    """
+    """Mean cross-entropy; returns (loss, gradient w.r.t. logits)."""
     N = logits.shape[0]
     probs = softmax(logits)
     log_probs = -np.log(probs[np.arange(N), targets] + 1e-9)

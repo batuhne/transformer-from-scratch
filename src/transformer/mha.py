@@ -9,11 +9,7 @@ from transformer.linear import softmax
 
 
 class MultiHeadAttention:
-    """Multi-head scaled dot-product attention with output projection.
-
-    Splits d_model into n_heads parallel attention heads of size d_k = d_model
-    // n_heads, then concatenates and projects with W_O.
-    """
+    """n_heads parallel scaled-dot-product attentions, concatenated + W_O."""
 
     def __init__(self, d_model: int, n_heads: int, dropout: float = 0.0) -> None:
         assert d_model % n_heads == 0, "d_model must be divisible by n_heads"
@@ -53,15 +49,6 @@ class MultiHeadAttention:
         return x.transpose(0, 2, 1, 3).reshape(B, T, self.d_model)
 
     def forward(self, x: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:
-        """Forward pass.
-
-        Args:
-            x: shape (B, T, d_model).
-            mask: bool array broadcastable to (B, n_heads, T, T); True blocks.
-
-        Returns:
-            Output of shape (B, T, d_model).
-        """
         self.x = x
 
         self.Q = self._split_heads(x @ self.W_Q)
@@ -79,14 +66,6 @@ class MultiHeadAttention:
         return self.attn_output @ self.W_O
 
     def backward(self, dout: np.ndarray) -> np.ndarray:
-        """Backward pass.
-
-        Args:
-            dout: gradient w.r.t. output, shape (B, T, d_model).
-
-        Returns:
-            Gradient w.r.t. input x, shape (B, T, d_model).
-        """
         D = dout.shape[-1]
 
         self.dW_O = self.attn_output.reshape(-1, D).T @ dout.reshape(-1, D)
