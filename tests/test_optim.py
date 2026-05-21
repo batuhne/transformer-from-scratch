@@ -109,3 +109,56 @@ def test_adam_global_scale_disabled_returns_unity() -> None:
     p = _P()
     opt = Adam([(p, "W")], max_norm=None)
     assert opt._global_scale() == 1.0
+
+
+def test_adamw_decays_2d_param_with_zero_gradient() -> None:
+    """A 2D param with zero grad still shrinks by (1 - lr*wd) under AdamW."""
+
+    class _P:
+        W = np.full((2, 2), 5.0)
+        dW = np.zeros((2, 2))
+
+    p = _P()
+    opt = Adam([(p, "W")], lr=0.1, weight_decay=0.5, max_norm=None)
+    opt.step()
+    # Adam update with zero grad = zero; only weight decay fires.
+    # delta = lr * wd * W_old = 0.1 * 0.5 * 5 = 0.25
+    expected = 5.0 - 0.25
+    assert np.allclose(p.W, expected)
+
+
+def test_adamw_skips_decay_for_1d_param() -> None:
+    """1D params (biases, gamma, beta) must NOT be decayed."""
+
+    class _P:
+        W = np.full(4, 5.0)  # 1D, so no decay
+        dW = np.zeros(4)
+
+    p = _P()
+    opt = Adam([(p, "W")], lr=0.1, weight_decay=0.5, max_norm=None)
+    opt.step()
+    assert np.array_equal(p.W, np.full(4, 5.0))
+
+
+def test_adamw_decay_zero_matches_plain_adam() -> None:
+    """weight_decay=0 must produce the same update as the no-decay path."""
+    np.random.seed(0)
+    W0 = np.random.randn(3, 3)
+    dW = np.random.randn(3, 3)
+
+    class _P:
+        pass
+
+    p1 = _P()
+    p1.W = W0.copy()
+    p1.dW = dW
+    opt1 = Adam([(p1, "W")], lr=0.1, weight_decay=0.0, max_norm=None)
+    opt1.step()
+
+    p2 = _P()
+    p2.W = W0.copy()
+    p2.dW = dW
+    opt2 = Adam([(p2, "W")], lr=0.1, max_norm=None)
+    opt2.step()
+
+    assert np.array_equal(p1.W, p2.W)

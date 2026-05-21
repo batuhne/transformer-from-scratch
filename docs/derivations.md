@@ -721,6 +721,26 @@ that lets Adam tolerate poorly scaled gradients near initialisation. The
 test `test_adam_bias_correction_first_step_matches_grad` confirms this
 exactly with $\varepsilon = 0$.
 
+### Decoupled weight decay (AdamW)
+
+Adding L2 regularisation $\tfrac{\lambda}{2} \lVert \theta \rVert^{2}$ to the
+loss would put $\lambda \theta$ inside the gradient, where Adam's EMA and
+$\sqrt{\hat v_t}$ normalisation would distort it: weights with small
+historical $\sqrt{\hat v_t}$ would be decayed disproportionately. Loshchilov
+& Hutter (2019) decouple the decay from the gradient:
+
+$$
+\theta_t = \theta_{t-1} - \alpha \left[
+  \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon} + \lambda \, \theta_{t-1}
+\right].
+$$
+
+The decay term uses $\theta_{t-1}$ directly, never enters $m_t$ or $v_t$, and
+is applied alongside (not through) the Adam step. With $\lambda = 0$ this
+reduces to plain Adam. Following the GPT-style convention, `Adam.step`
+applies decay only to 2D parameters (weight matrices) and skips biases and
+LayerNorm $\gamma, \beta$.
+
 ### Epsilon placement
 
 The implementation in `optim.py` writes
