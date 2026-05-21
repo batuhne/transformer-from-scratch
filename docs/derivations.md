@@ -736,12 +736,25 @@ is numerically very similar but technically different and not used here.
 
 ### Gradient clipping
 
-`Adam.step` also applies per-element clipping to $\lvert \mathrm{grad} \rvert
-\leq 1$ before forming $m_t, v_t$, controlled by the `clip` constructor
-parameter. This is not part of Adam proper; it is a defensive measure to
-prevent occasional large gradients from poisoning the EMA estimates. It can
-be disabled (`clip=None`) and is in fact disabled in the optimiser
-convergence test.
+`Adam.step` also applies *global-norm* gradient clipping before forming
+$m_t, v_t$. Let $g = (g_1, g_2, \ldots, g_P)$ be the concatenation of every
+parameter's gradient. Compute its total L2 norm
+
+$$
+\lVert g \rVert_2 = \sqrt{\sum_{i=1}^{P} g_i^{2}}.
+$$
+
+If $\lVert g \rVert_2 > \tau$ (where $\tau$ is `max_norm`), every gradient is
+rescaled by the same factor $\tau / \lVert g \rVert_2$, otherwise the
+gradients pass through unchanged. This is *direction-preserving*: it shrinks
+the step magnitude in pathological regimes without rotating it.
+
+Per-element clipping (e.g. $\lvert g_i \rvert \leq c$) would silently change
+the gradient *direction* whenever any single coordinate exceeds the cap,
+which can mis-align Adam's EMA estimates with the actual loss surface. We
+use global-norm clipping for that reason, matching the standard practice
+since GPT-2. Set `max_norm=None` to disable (and the optimiser convergence
+test does, since its quadratic-loss gradients are well-behaved).
 
 ### Numerical check (sketch)
 

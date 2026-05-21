@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from transformer.optim import Adam
 
@@ -23,7 +24,7 @@ class _Quadratic:
 def test_adam_converges_on_quadratic() -> None:
     target = np.array([3.0, -2.0, 1.5, 0.1])
     problem = _Quadratic(target)
-    opt = Adam([(problem, "W")], lr=0.1, clip=None)
+    opt = Adam([(problem, "W")], lr=0.1, max_norm=None)
 
     initial_loss = problem.step()
     for _ in range(500):
@@ -39,7 +40,7 @@ def test_adam_bias_correction_first_step_matches_grad() -> None:
     """On step 1, m_hat / sqrt(v_hat) reduces to grad / |grad| (sign(grad))."""
     p = _Quadratic(target=np.array([1.0]))
     p.W = np.array([0.5])
-    opt = Adam([(p, "W")], lr=1.0, clip=None, eps=0.0)
+    opt = Adam([(p, "W")], lr=1.0, max_norm=None, eps=0.0)
 
     p.step()
     opt.step()
@@ -59,3 +60,52 @@ def test_adam_skips_params_with_no_gradient() -> None:
     opt = Adam([(p, "W")], lr=0.1)
     opt.step()
     assert np.array_equal(p.W, np.array([1.0, 2.0]))
+
+
+def test_adam_global_scale_rescales_when_total_norm_exceeds_max() -> None:
+    """If the concatenated gradient has norm > max_norm, scale = max_norm/norm."""
+
+    class _P:
+        W = np.zeros(2)
+        dW = np.array([3.0, 4.0])  # ||dW||_2 = 5
+
+    p = _P()
+    opt = Adam([(p, "W")], max_norm=1.0)
+    assert opt._global_scale() == pytest.approx(1.0 / 5.0, abs=1e-5)
+
+
+def test_adam_global_scale_is_unity_when_total_norm_under_max() -> None:
+    class _P:
+        W = np.zeros(2)
+        dW = np.array([0.3, 0.4])  # norm = 0.5 < 1.0
+
+    p = _P()
+    opt = Adam([(p, "W")], max_norm=1.0)
+    assert opt._global_scale() == 1.0
+
+
+def test_adam_global_scale_aggregates_across_multiple_params() -> None:
+    """Norm is computed over the concatenation of all grads, not per-param."""
+
+    class _P:
+        W = np.zeros(1)
+        dW = np.array([3.0])
+
+    class _Q:
+        W = np.zeros(1)
+        dW = np.array([4.0])
+
+    p, q = _P(), _Q()
+    opt = Adam([(p, "W"), (q, "W")], max_norm=1.0)
+    # Concat norm = sqrt(9 + 16) = 5; scale = 1/5.
+    assert opt._global_scale() == pytest.approx(0.2, abs=1e-5)
+
+
+def test_adam_global_scale_disabled_returns_unity() -> None:
+    class _P:
+        W = np.zeros(2)
+        dW = np.array([100.0, 100.0])
+
+    p = _P()
+    opt = Adam([(p, "W")], max_norm=None)
+    assert opt._global_scale() == 1.0
