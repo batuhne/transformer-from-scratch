@@ -24,10 +24,12 @@ class Transformer:
         n_layers: int,
         max_seq_len: int,
         dropout: float = 0.0,
+        tie_weights: bool = False,
     ) -> None:
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.max_seq_len = max_seq_len
+        self.tie_weights = tie_weights
 
         self.embedding = Embedding(vocab_size, d_model)
         self.pe = get_positional_encoding(max_seq_len, d_model)
@@ -36,6 +38,10 @@ class Transformer:
         ]
         self.ln_final = LayerNorm(d_model)
         self.output_proj = Linear(d_model, vocab_size)
+        if tie_weights:
+            # output_proj.W becomes a transposed view of embedding.W: the two
+            # share storage, so in-place Adam updates to embedding.W propagate.
+            self.output_proj.W = self.embedding.W.T
 
     def forward(self, indices: np.ndarray) -> np.ndarray:
         """Map token indices (B, T) to logits (B, T, vocab_size)."""
@@ -53,19 +59,19 @@ class Transformer:
         for block in reversed(self.blocks):
             dx = block.backward(dx)
         self.embedding.backward(dx)
+        if self.tie_weights:
+            # Shared W collects gradient from both the lookup and the output
+            # projection; fold the projection contribution into embedding.dW.
+            self.embedding.dW += self.output_proj.dW.T
 
     def params(self) -> list[tuple[object, str]]:
         out: list[tuple[object, str]] = [(self.embedding, "W")]
         for block in self.blocks:
             out.extend(block.params())
-        out.extend(
-            [
-                (self.ln_final, "gamma"),
-                (self.ln_final, "beta"),
-                (self.output_proj, "W"),
-                (self.output_proj, "b"),
-            ]
-        )
+        out.extend([(self.ln_final, "gamma"), (self.ln_final, "beta")])
+        if not self.tie_weights:
+            out.append((self.output_proj, "W"))
+        out.append((self.output_proj, "b"))
         return out
 
     def count_params(self) -> int:

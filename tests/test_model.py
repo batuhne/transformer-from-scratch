@@ -7,6 +7,7 @@ from conftest import numerical_gradient, relative_error
 
 from transformer.linear import cross_entropy_loss
 from transformer.model import Transformer
+from transformer.optim import Adam
 
 
 def _tiny_model() -> Transformer:
@@ -109,6 +110,72 @@ def test_model_set_training_toggles_every_dropout() -> None:
     assert all(not d.training for d in drops)
     model.set_training(True)
     assert all(d.training for d in drops)
+
+
+def test_tie_weights_reduces_param_count_by_vocab_times_d_model() -> None:
+    kwargs = dict(
+        vocab_size=11, d_model=8, n_heads=2, d_ff=16, n_layers=2, max_seq_len=16
+    )
+    untied = Transformer(**kwargs, tie_weights=False)
+    tied = Transformer(**kwargs, tie_weights=True)
+    assert untied.count_params() - tied.count_params() == 11 * 8
+
+
+def test_tie_weights_shares_storage_between_embedding_and_output_proj() -> None:
+    model = Transformer(
+        vocab_size=11, d_model=8, n_heads=2, d_ff=16, n_layers=1, max_seq_len=16,
+        tie_weights=True,
+    )
+    assert np.shares_memory(model.embedding.W, model.output_proj.W)
+    assert np.array_equal(model.output_proj.W, model.embedding.W.T)
+
+
+def test_tie_weights_combined_gradient_matches_numerical() -> None:
+    np.random.seed(0)
+    vocab_size = 5
+    model = Transformer(
+        vocab_size=vocab_size, d_model=4, n_heads=2, d_ff=8, n_layers=1, max_seq_len=8,
+        tie_weights=True,
+    )
+    indices = np.random.randint(0, vocab_size, size=(2, 3))
+    targets = np.random.randint(0, vocab_size, size=(2, 3))
+
+    logits = model.forward(indices)
+    B, T, V = logits.shape
+    _, dlogits_flat = cross_entropy_loss(logits.reshape(-1, V), targets.reshape(-1))
+    model.backward(dlogits_flat.reshape(B, T, V))
+    analytical = model.embedding.dW.copy()
+
+    def loss_at(W: np.ndarray) -> float:
+        # In-place write preserves the output_proj.W transpose view.
+        model.embedding.W[:] = W
+        logits = model.forward(indices)
+        loss, _ = cross_entropy_loss(logits.reshape(-1, V), targets.reshape(-1))
+        return loss
+
+    num = numerical_gradient(loss_at, model.embedding.W.copy())
+    assert relative_error(analytical, num) < 1e-5
+
+
+def test_tie_weights_persists_through_adam_step() -> None:
+    np.random.seed(0)
+    vocab_size = 5
+    model = Transformer(
+        vocab_size=vocab_size, d_model=4, n_heads=2, d_ff=8, n_layers=1, max_seq_len=8,
+        tie_weights=True,
+    )
+    indices = np.random.randint(0, vocab_size, size=(2, 3))
+    targets = np.random.randint(0, vocab_size, size=(2, 3))
+    logits = model.forward(indices)
+    B, T, V = logits.shape
+    _, dlogits_flat = cross_entropy_loss(logits.reshape(-1, V), targets.reshape(-1))
+    model.backward(dlogits_flat.reshape(B, T, V))
+
+    optimizer = Adam(model.params(), lr=1e-2)
+    optimizer.step()
+
+    assert np.shares_memory(model.embedding.W, model.output_proj.W)
+    assert np.array_equal(model.output_proj.W, model.embedding.W.T)
 
 
 def test_model_eval_mode_is_deterministic_under_dropout() -> None:
