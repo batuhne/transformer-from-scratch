@@ -53,6 +53,29 @@ class Transformer:
         x = self.ln_final.forward(x)
         return self.output_proj.forward(x)
 
+    def init_caches(self) -> list[dict[str, np.ndarray] | None]:
+        return [None] * len(self.blocks)
+
+    def forward_step(
+        self,
+        indices: np.ndarray,
+        caches: list[dict[str, np.ndarray] | None],
+        position: int,
+    ) -> tuple[np.ndarray, list[dict[str, np.ndarray]]]:
+        """Incremental forward; `position` is the absolute pos of the first new token."""
+        T_new = indices.shape[1]
+        if position + T_new > self.max_seq_len:
+            raise ValueError(
+                f"position+T_new={position + T_new} exceeds max_seq_len={self.max_seq_len}"
+            )
+        x = self.embedding.forward(indices) + self.pe[position : position + T_new]
+        new_caches: list[dict[str, np.ndarray]] = []
+        for block, cache in zip(self.blocks, caches):
+            x, new_cache = block.forward_step(x, cache)
+            new_caches.append(new_cache)
+        x = self.ln_final.forward(x)
+        return self.output_proj.forward(x), new_caches
+
     def backward(self, dlogits: np.ndarray) -> None:
         dx = self.output_proj.backward(dlogits)
         dx = self.ln_final.backward(dx)

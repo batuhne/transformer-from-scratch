@@ -178,6 +178,31 @@ def test_tie_weights_persists_through_adam_step() -> None:
     assert np.array_equal(model.output_proj.W, model.embedding.W.T)
 
 
+def test_forward_step_bulk_matches_forward() -> None:
+    np.random.seed(0)
+    model = _tiny_model()
+    model.set_training(False)
+    indices = np.random.randint(0, 7, size=(2, 6))
+    ref = model.forward(indices)
+    logits, _ = model.forward_step(indices, model.init_caches(), position=0)
+    assert np.allclose(logits, ref, atol=1e-10)
+
+
+def test_forward_step_incremental_matches_forward() -> None:
+    np.random.seed(0)
+    model = _tiny_model()
+    model.set_training(False)
+    indices = np.random.randint(0, 7, size=(1, 6))
+    ref = model.forward(indices)
+    caches = model.init_caches()
+    outs = []
+    for t in range(indices.shape[1]):
+        logits_t, caches = model.forward_step(indices[:, t : t + 1], caches, position=t)
+        outs.append(logits_t)
+    incremental = np.concatenate(outs, axis=1)
+    assert np.allclose(incremental, ref, atol=1e-10)
+
+
 def test_model_eval_mode_is_deterministic_under_dropout() -> None:
     """Same input twice in eval mode produces identical logits even with dropout>0."""
     np.random.seed(0)
