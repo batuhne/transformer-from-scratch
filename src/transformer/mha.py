@@ -65,6 +65,38 @@ class MultiHeadAttention:
         self.attn_output = self._merge_heads(attn_out)
         return self.attn_output @ self.W_O
 
+    def forward_step(
+        self,
+        x: np.ndarray,
+        K_cache: np.ndarray | None,
+        V_cache: np.ndarray | None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Incremental attention; appends `x`'s K,V to caches. Returns (out, K, V)."""
+        Q = self._split_heads(x @ self.W_Q)
+        K_new = self._split_heads(x @ self.W_K)
+        V_new = self._split_heads(x @ self.W_V)
+
+        if K_cache is not None:
+            K = np.concatenate([K_cache, K_new], axis=2)
+            V = np.concatenate([V_cache, V_new], axis=2)
+        else:
+            K, V = K_new, V_new
+
+        T_cache = K_cache.shape[2] if K_cache is not None else 0
+        T_new = x.shape[1]
+        T_total = T_cache + T_new
+
+        scores = (Q @ K.transpose(0, 1, 3, 2)) / np.sqrt(self.d_k)
+        if T_new > 1:
+            i = np.arange(T_new)[:, None]
+            j = np.arange(T_total)[None, :]
+            mask = j > (T_cache + i)
+            scores = np.where(mask, -1e9, scores)
+
+        attn = softmax(scores)
+        out = self._merge_heads(attn @ V)
+        return out @ self.W_O, K, V
+
     def backward(self, dout: np.ndarray) -> np.ndarray:
         D = dout.shape[-1]
 

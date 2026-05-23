@@ -46,6 +46,28 @@ def test_mha_dx_matches_numerical() -> None:
     assert relative_error(dx, num_dx) < 1e-5
 
 
+def test_forward_step_bulk_matches_forward() -> None:
+    mha = MultiHeadAttention(d_model=8, n_heads=2)
+    x = np.random.randn(2, 5, 8)
+    ref = mha.forward(x, mask=causal_mask(5))
+    out, K, V = mha.forward_step(x, K_cache=None, V_cache=None)
+    assert np.allclose(out, ref, atol=1e-10)
+    assert K.shape == (2, 2, 5, 4) and V.shape == (2, 2, 5, 4)
+
+
+def test_forward_step_incremental_matches_forward() -> None:
+    mha = MultiHeadAttention(d_model=8, n_heads=2)
+    x = np.random.randn(1, 5, 8)
+    ref = mha.forward(x, mask=causal_mask(5))
+    K_cache, V_cache = None, None
+    outs = []
+    for t in range(5):
+        out_t, K_cache, V_cache = mha.forward_step(x[:, t : t + 1, :], K_cache, V_cache)
+        outs.append(out_t)
+    incremental = np.concatenate(outs, axis=1)
+    assert np.allclose(incremental, ref, atol=1e-10)
+
+
 def test_mha_attention_weights_respect_causal_mask() -> None:
     mha = MultiHeadAttention(d_model=8, n_heads=2)
     x = np.random.randn(1, 4, 8)
