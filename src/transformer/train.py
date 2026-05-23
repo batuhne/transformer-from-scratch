@@ -23,6 +23,7 @@ class TrainConfig:
     weight_decay: float = 0.0
     warmup_steps: int = 0
     min_lr_ratio: float = 1.0
+    max_norm: float | None = 1.0
     log_every: int = 200
     eval_every: int = 500
     eval_batches: int = 20
@@ -68,7 +69,12 @@ def train(
             f"seq_len={config.seq_len} exceeds model.max_seq_len={model.max_seq_len}"
         )
 
-    optimizer = Adam(model.params(), lr=config.lr, weight_decay=config.weight_decay)
+    optimizer = Adam(
+        model.params(),
+        lr=config.lr,
+        weight_decay=config.weight_decay,
+        max_norm=config.max_norm,
+    )
     history = TrainHistory()
     t0 = time.time()
     model.set_training(True)
