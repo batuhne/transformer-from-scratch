@@ -1,110 +1,139 @@
 # Transformer from Scratch (NumPy Only)
 
-A **fully trainable decoder-only transformer** (GPT-style) built entirely with NumPy. No PyTorch, no TensorFlow. Just pure math.
+[![CI](https://github.com/batuhne/transformer-from-scratch/actions/workflows/ci.yml/badge.svg)](https://github.com/batuhne/transformer-from-scratch/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 
-## What is this?
+A decoder-only (GPT-style) transformer built entirely in **NumPy**, with no deep-learning framework. Every component (multi-head attention, LayerNorm, AdamW, full backpropagation) is hand-derived and checked against numerical gradients. It trains a character-level language model on Shakespeare.
 
-This project teaches you how a **GPT-like language model** works by building one from zero. Every component (attention, backpropagation, optimizer) is implemented by hand in NumPy.
+The goal is **implementation correctness**, not text quality: this is a readable, tested, mathematically documented reference for how a transformer actually works under the hood.
 
-The model learns to predict the next character in Shakespeare text. After ~60 seconds of training, it generates text like:
+![Training loss](docs/assets/loss_curve.png)
 
-```
-Before training:  "First>;&qZ!mK..."        (random garbage)
-After training:   "First Citizen:\nI the great toe! why the great toe!"  (learned patterns!)
-```
+## What this is (and is not)
+
+This repo demonstrates that a transformer's forward and backward passes, optimizer, and decoding loop can be written from first principles and verified. On a tiny corpus (~10K characters) a 153K-parameter character model cannot produce real English; it learns character statistics and Shakespearean structure (line breaks, `Name:` speaker tags, vowel/consonant rhythm) and outputs word-shaped text. That is the expected result for a model this size on data this small, and the numbers below show it genuinely learns.
+
+## Results
+
+Validation is a contiguous 10% tail of the corpus, never seen during training.
+
+| Metric | Value |
+|--------|-------|
+| Parameters | 153,082 |
+| Vocabulary | 58 characters |
+| Random baseline loss | ln(58) = 4.06 |
+| Trained val loss | ~2.16 |
+| Trained val perplexity | **8.85** |
+| Training | 3000 steps, ~70s on CPU |
+
+### Ablation: each modern feature vs a stable baseline
+
+Single seed, same data and budget, one feature toggled per row (see [`experiments/ablations.ipynb`](experiments/ablations.ipynb)).
+
+| Config | Val perplexity |
+|--------|---------------|
+| baseline (grad clip only) | 51.3 |
+| + dropout | 11.8 |
+| + weight tying | 16.0 |
+| + AdamW | 52.6 |
+| + LR schedule | 15.7 |
+| **full modern stack** | **8.4** |
+
+Dropout is the biggest single win on this corpus; weight decay alone does not help and only pays off stacked with other regularization.
+
+### KV-cache speedup
+
+Incremental decoding caches each layer's K and V, turning per-step work from O(T^2) into O(T). The advantage grows with context length (see [`experiments/bench_kv_cache.py`](experiments/bench_kv_cache.py)).
+
+| Context length T | Speedup |
+|------------------|---------|
+| 32 (project default) | 1.4x |
+| 128 | 3.2x |
+| 256 | 7.5x |
+
+## Learned attention
+
+Every head in block 0, fed a short prompt. The lower-triangular shape confirms the causal mask, and each head learns a distinct mix of local and positional attention.
+
+![Attention heads](docs/assets/attention_heads.png)
+
+## What is implemented from scratch
+
+- **Forward and backward** for every layer: embedding, sinusoidal positional encoding, scaled dot-product attention, multi-head attention, LayerNorm, ReLU FFN, linear, softmax, cross-entropy
+- **Numerical gradient checks** for each component (central differences, `rel_error < 1e-5`)
+- **Modern training stack**: inverted dropout, weight tying, AdamW (decoupled weight decay), global-norm gradient clipping, linear warmup + cosine LR schedule
+- **Inference**: KV-cached generation, temperature, top-k, and top-p (nucleus) sampling
+- **Evaluation**: deterministic token-weighted perplexity over the full validation set
+- **Reproducibility**: seeded runs produce bit-identical loss curves
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│         Token Indices (characters)       │
-└──────────────────┬──────────────────────┘
-                   ▼
-┌─────────────────────────────────────────┐
-│  Character Embedding (vocab=65, dim=64)  │
-│  + Sinusoidal Positional Encoding        │
-└──────────────────┬──────────────────────┘
-                   ▼
-┌─────────────────────────────────────────┐
-│        3x Transformer Block              │
-│  ┌───────────────────────────────────┐   │
-│  │ LayerNorm → Multi-Head Attention  │   │
-│  │ (4 heads, d_k=16) + Residual     │   │
-│  ├───────────────────────────────────┤   │
-│  │ LayerNorm → FFN (256, ReLU)      │   │
-│  │ + Residual                        │   │
-│  └───────────────────────────────────┘   │
-└──────────────────┬──────────────────────┘
-                   ▼
-┌─────────────────────────────────────────┐
-│  LayerNorm → Linear → Softmax           │
-│  Output: probability of next character   │
-└─────────────────────────────────────────┘
+Token indices
+   |
+Char embedding (vocab=58, d_model=64) + sinusoidal positional encoding
+   |
+3x  Pre-LN block:
+       LayerNorm -> Multi-Head Attention (4 heads, d_k=16) -> + residual
+       LayerNorm -> FFN (d_ff=256, ReLU)                   -> + residual
+   |
+Final LayerNorm -> Linear (weight-tied with embedding) -> softmax
+   |
+Next-character distribution
 ```
 
-**~150K parameters** | Trains on CPU in ~60 seconds | 3,000 training steps
+Trained with AdamW, dropout 0.1, warmup + cosine schedule, global-norm clipping.
 
-## Project Structure
+## Project structure
 
 ```
 transformer-from-scratch/
-├── README.md
-├── requirements.txt          # numpy, matplotlib, jupyter
-├── data/
-│   └── input.txt             # Shakespeare training corpus
-└── notebooks/
-    ├── 01_foundations.ipynb           # Linear layer, ReLU, softmax, gradients
-    ├── 02_embeddings_and_data.ipynb   # Tokenizer, embeddings, positional encoding
-    ├── 03_self_attention.ipynb        # Scaled dot-product attention, causal mask
-    ├── 04_multihead_attention.ipynb   # Multi-head attention + gradient checking
-    ├── 05_ffn_and_layernorm.ipynb     # Feed-forward network, layer normalization
-    ├── 06_transformer_model.ipynb     # Assemble full decoder-only transformer
-    └── 07_training_and_generation.ipynb  # Train the model + generate text
+├── src/transformer/      # the library (forward + backward, all NumPy)
+│   ├── linear.py, attention.py, mha.py, layernorm.py, ffn.py
+│   ├── block.py, model.py, embedding.py, dropout.py
+│   ├── optim.py, schedule.py, train.py
+│   ├── generate.py, sampling.py, evaluate.py
+│   └── visualize.py, utils.py
+├── tests/                # pytest gradient checks and behavior tests
+├── notebooks/            # 01-07 tutorial build, demo.ipynb showcase
+├── experiments/          # ablations.ipynb, bench_kv_cache.py
+├── docs/                 # derivations.md (full math), assets/
+└── data/input.txt        # Shakespeare corpus
 ```
 
-## How to Use
+## Quick start
 
 ```bash
-# 1. Create virtual environment
 python3 -m venv venv
 source venv/bin/activate
-
-# 2. Install dependencies
 pip install -r requirements.txt
+pip install -e .
 
-# 3. Launch Jupyter
-jupyter notebook notebooks/
+# Run the end-to-end showcase (train + sample + visualize)
+jupyter notebook notebooks/demo.ipynb
+
+# Run the test suite (gradient checks + behavior)
+pytest -q
 ```
 
-Then open the notebooks in order: **01 → 02 → 03 → 04 → 05 → 06 → 07**
+## Math derivations
 
-Each notebook is self-contained and can run independently.
+[`docs/derivations.md`](docs/derivations.md) works through the gradient of every component by hand: softmax + cross-entropy, LayerNorm backward, attention gradients, the multi-head reshape, Adam with bias correction, the LR schedules, inverted dropout, and weight tying. Each derivation links to the source line that implements it.
 
-## What Each Notebook Teaches
+## Notebooks
 
-| # | Notebook | You'll Learn |
-|---|----------|-------------|
-| 01 | Foundations | How neural networks compute gradients (backprop) |
-| 02 | Embeddings & Data | How text becomes numbers a model can process |
-| 03 | Self-Attention | The core idea behind transformers: "which words should I look at?" |
-| 04 | Multi-Head Attention | Running multiple attention patterns in parallel |
-| 05 | FFN & LayerNorm | The "thinking" layers and training stabilization |
-| 06 | Transformer Model | Putting all pieces together into one model |
-| 07 | Training & Generation | Teaching the model to write Shakespeare |
+| # | Notebook | Topic |
+|---|----------|-------|
+| 01 | Foundations | Linear, ReLU, softmax, backprop |
+| 02 | Embeddings & Data | Tokenizer, embeddings, positional encoding |
+| 03 | Self-Attention | Scaled dot-product attention, causal mask |
+| 04 | Multi-Head Attention | Parallel heads + gradient checking |
+| 05 | FFN & LayerNorm | Feed-forward network, normalization |
+| 06 | Transformer Model | Assembling the full model |
+| 07 | Training & Generation | Training loop and sampling |
+| -- | demo.ipynb | End-to-end showcase using `src/` |
 
-## Training Results
+## License
 
-| Metric | Value |
-|--------|-------|
-| Initial loss | ~3.08 (random guessing) |
-| Final loss | ~0.46 |
-| Training time | ~60 seconds |
-| Speed | ~50 steps/second |
-
-## Dependencies
-
-- **numpy**: all math and model implementation
-- **matplotlib**: visualizations only
-- **jupyter**: notebook environment
-
-No PyTorch. No TensorFlow. No pre-trained embeddings. Truly from scratch.
+[MIT](LICENSE)

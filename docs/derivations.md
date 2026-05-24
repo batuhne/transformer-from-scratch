@@ -13,16 +13,70 @@ explicit by the bounds.
 
 | # | Section | Implementation | Numerical check |
 |---|---------|----------------|-----------------|
-| 1 | [Softmax and cross-entropy](#1-softmax-and-cross-entropy-the-combined-gradient) | [`linear.py:8-34`](../src/transformer/linear.py#L8-L34) | [`test_linear.py`](../tests/test_linear.py) |
-| 2 | [LayerNorm backward](#2-layernorm-backward) | [`layernorm.py:8-48`](../src/transformer/layernorm.py#L8-L48) | [`test_layernorm.py`](../tests/test_layernorm.py) |
-| 3 | [Attention gradients](#3-scaled-dot-product-attention-gradients-in-matrix-form) | [`attention.py:19-88`](../src/transformer/attention.py#L19-L88) | [`test_attention.py`](../tests/test_attention.py) |
-| 4 | [Multi-head reshape](#4-multi-head-reshape-in-tensor-index-notation) | [`mha.py:10-110`](../src/transformer/mha.py#L10-L110) | [`test_mha.py`](../tests/test_mha.py) |
-| 5 | [Adam + bias correction](#5-adam-update-rule-and-bias-correction) | [`optim.py:8-60`](../src/transformer/optim.py#L8-L60) | [`test_optim.py`](../tests/test_optim.py) |
-| 6 | [LR schedules: warmup + cosine](#6-lr-schedules-warmup-and-cosine-decay) | [`schedule.py`](../src/transformer/schedule.py) | [`test_schedule.py`](../tests/test_schedule.py) |
-| 7 | [Inverted dropout](#7-inverted-dropout-expectation-and-gradient) | [`dropout.py`](../src/transformer/dropout.py) | [`test_dropout.py`](../tests/test_dropout.py) |
-| 8 | [Weight tying](#8-weight-tying-combining-two-gradient-contributions) | [`model.py`](../src/transformer/model.py) | [`test_model.py`](../tests/test_model.py) |
+| 1 | [Linear and ReLU](#1-linear-and-relu-the-building-blocks) | [`linear.py:29-63`](../src/transformer/linear.py#L29-L63) | [`test_linear.py`](../tests/test_linear.py) |
+| 2 | [Softmax and cross-entropy](#2-softmax-and-cross-entropy-the-combined-gradient) | [`linear.py:8-34`](../src/transformer/linear.py#L8-L34) | [`test_linear.py`](../tests/test_linear.py) |
+| 3 | [LayerNorm backward](#3-layernorm-backward) | [`layernorm.py:8-48`](../src/transformer/layernorm.py#L8-L48) | [`test_layernorm.py`](../tests/test_layernorm.py) |
+| 4 | [Attention gradients](#4-scaled-dot-product-attention-gradients-in-matrix-form) | [`attention.py:19-88`](../src/transformer/attention.py#L19-L88) | [`test_attention.py`](../tests/test_attention.py) |
+| 5 | [Multi-head reshape](#5-multi-head-reshape-in-tensor-index-notation) | [`mha.py:10-110`](../src/transformer/mha.py#L10-L110) | [`test_mha.py`](../tests/test_mha.py) |
+| 6 | [Adam + bias correction](#6-adam-update-rule-and-bias-correction) | [`optim.py:8-60`](../src/transformer/optim.py#L8-L60) | [`test_optim.py`](../tests/test_optim.py) |
+| 7 | [LR schedules: warmup + cosine](#7-lr-schedules-warmup-and-cosine-decay) | [`schedule.py`](../src/transformer/schedule.py) | [`test_schedule.py`](../tests/test_schedule.py) |
+| 8 | [Inverted dropout](#8-inverted-dropout-expectation-and-gradient) | [`dropout.py`](../src/transformer/dropout.py) | [`test_dropout.py`](../tests/test_dropout.py) |
+| 9 | [Weight tying](#9-weight-tying-combining-two-gradient-contributions) | [`model.py`](../src/transformer/model.py) | [`test_model.py`](../tests/test_model.py) |
 
-## 1. Softmax and cross-entropy: the combined gradient
+## 1. Linear and ReLU: the building blocks
+
+**Implementation:** [`src/transformer/linear.py:29-63`](../src/transformer/linear.py#L29-L63) (`Linear`, `ReLU`).
+**Numerical check:** [`tests/test_linear.py`](../tests/test_linear.py).
+
+Every parameterized layer reduces to these two primitives. The FFN is literally
+Linear → ReLU → Linear, and the attention and output projections are Linears, so
+deriving them once covers the rest by composition.
+
+### Linear
+
+For input $X \in \mathbb{R}^{N \times d_{\text{in}}}$, weight
+$W \in \mathbb{R}^{d_{\text{in}} \times d_{\text{out}}}$ and bias
+$b \in \mathbb{R}^{d_{\text{out}}}$, the forward pass is $Y = XW + b$, i.e.
+$Y_{nj} = \sum_{i} X_{ni} W_{ij} + b_j$. Given $\mathrm{d}Y = \partial L / \partial Y$,
+read off each gradient with the chain rule:
+
+$$
+\mathrm{d}W_{ij} = \sum_{n} \frac{\partial L}{\partial Y_{nj}} \frac{\partial Y_{nj}}{\partial W_{ij}}
+= \sum_{n} X_{ni} \, \mathrm{d}Y_{nj}
+\;\Longrightarrow\; \mathrm{d}W = X^{\top} \mathrm{d}Y,
+$$
+
+$$
+\mathrm{d}b_j = \sum_{n} \mathrm{d}Y_{nj}
+\;\Longrightarrow\; \mathrm{d}b = \sum_{n} \mathrm{d}Y_{n,:},
+\qquad
+\mathrm{d}X = \mathrm{d}Y \, W^{\top}.
+$$
+
+This is `Linear.backward` (`linear.py:44-49`); the leading `reshape(-1, ...)`
+just folds batch and sequence axes together so the same 2D identity applies.
+
+### ReLU
+
+$\mathrm{ReLU}(x) = \max(0, x)$ is elementwise, with derivative
+$\mathbb{1}[x > 0]$. Caching the boolean mask $M = \mathbb{1}[x > 0]$ from the
+forward pass, the backward is
+
+$$
+\mathrm{d}x = M \odot \mathrm{d}y.
+$$
+
+The boundary point $x = 0$ is non-differentiable; we follow the standard
+convention of using a subgradient of $0$ there ($M_i = 0$ when $x_i = 0$).
+
+### FFN composition
+
+The feed-forward block is $\mathrm{FFN}(x) = \mathrm{ReLU}(x W_1 + b_1) W_2 + b_2$.
+Its backward is just the two Linear backwards above with the ReLU mask in
+between; no new calculus. The test checks $\mathrm{d}W_1, \mathrm{d}b_1,
+\mathrm{d}W_2, \mathrm{d}b_2, \mathrm{d}x$ against central differences.
+
+## 2. Softmax and cross-entropy: the combined gradient
 
 **Implementation:** [`src/transformer/linear.py:8-34`](../src/transformer/linear.py#L8-L34) (`softmax`, `cross_entropy_loss`).
 **Numerical check:** [`tests/test_linear.py::test_softmax_cross_entropy_gradient_matches_numerical`](../tests/test_linear.py).
@@ -33,7 +87,7 @@ Let $z \in \mathbb{R}^{C}$ be the logits for one example and $t \in \{0, \dots, 
 its target class. The softmax produces a probability vector
 
 $$
-p_i = \operatorname{softmax}(z)_i = \frac{\exp(z_i)}{\sum_{j=1}^{C} \exp(z_j)},
+p_i = \mathrm{softmax}(z)_i = \frac{\exp(z_i)}{\sum_{j=1}^{C} \exp(z_j)},
 $$
 
 and the per-example cross-entropy is
@@ -134,7 +188,7 @@ assert relative_error(dlogits, num_dlogits) < 1e-5
 The test runs this with `N=5, C=7` and passes with relative error well under
 the threshold.
 
-## 2. LayerNorm backward
+## 3. LayerNorm backward
 
 **Implementation:** [`src/transformer/layernorm.py:8-48`](../src/transformer/layernorm.py#L8-L48) (`LayerNorm`).
 **Numerical check:** [`tests/test_layernorm.py::test_layernorm_dx_matches_numerical`](../tests/test_layernorm.py)
@@ -307,7 +361,7 @@ $\mathrm{d}x$ matches central differences with relative error $\approx 4 \times
 10^{-10}$, and the dense Jacobian $\partial \hat{x}_i / \partial x_k$ matches
 its numerical counterpart with absolute error $\approx 3.5 \times 10^{-10}$.
 
-## 3. Scaled dot-product attention: gradients in matrix form
+## 4. Scaled dot-product attention: gradients in matrix form
 
 **Implementation:** [`src/transformer/attention.py:19-88`](../src/transformer/attention.py#L19-L88) (`SingleHeadAttention`).
 **Numerical check:** [`tests/test_attention.py::test_attention_projection_gradients_match_numerical`](../tests/test_attention.py)
@@ -342,7 +396,7 @@ S = \frac{S'}{\sqrt{d_k}},
 $$
 
 $$
-A = \operatorname{softmax}(\tilde{S}) \text{ row-wise},
+A = \mathrm{softmax}(\tilde{S}) \text{ row-wise},
 \qquad
 O = A V \in \mathbb{R}^{T \times d_k}.
 $$
@@ -367,7 +421,7 @@ Shapes: $\mathrm{d}V$ is $T \times d_k$, $\mathrm{d}A$ is $T \times T$.
 ### Backward through row-wise softmax
 
 Each row $A_{i:}$ is the softmax of $\tilde S_{i:}$, independent of other rows.
-From section&nbsp;1, the single-row softmax Jacobian is
+From section&nbsp;2, the single-row softmax Jacobian is
 
 $$
 \frac{\partial A_{ij}}{\partial \tilde S_{ik}} = A_{ij} (\delta_{jk} - A_{ik}).
@@ -482,7 +536,7 @@ $\mathrm{d}Q$, $\mathrm{d}K$, $\mathrm{d}V$ directly at the pre-projection
 level on $T=4, d_k=3$ random tensors: all three matched numerically with
 relative error below $1.3 \times 10^{-9}$.
 
-## 4. Multi-head reshape in tensor index notation
+## 5. Multi-head reshape in tensor index notation
 
 **Implementation:** [`src/transformer/mha.py:10-110`](../src/transformer/mha.py#L10-L110) (`MultiHeadAttention`).
 **Numerical check:** [`tests/test_mha.py::test_mha_projection_gradients_match_numerical`](../tests/test_mha.py),
@@ -490,7 +544,7 @@ relative error below $1.3 \times 10^{-9}$.
 `::test_mha_attention_weights_respect_causal_mask`.
 
 Multi-head attention does not introduce any new calculus. It is the
-single-head attention of section&nbsp;3 applied to $H$ disjoint $d_k$-wide
+single-head attention of section&nbsp;4 applied to $H$ disjoint $d_k$-wide
 slices of the embedding axis, plus an output projection. The "split heads"
 and "merge heads" reshapes look like rearrangements of memory and nothing
 more; what they actually do is pick out and re-assemble those slices. Writing
@@ -546,10 +600,10 @@ $$
 \texttt{split}(XW_Q)_{b, h, t, k} = (X W_{Q, h})_{b, t, k}.
 $$
 
-Now feed each head through the section&nbsp;3 scaled dot-product attention:
+Now feed each head through the section&nbsp;4 scaled dot-product attention:
 
 $$
-O_h = \operatorname{attn}(X W_{Q, h}, X W_{K, h}, X W_{V, h}),
+O_h = \mathrm{attn}(X W_{Q, h}, X W_{K, h}, X W_{V, h}),
 \qquad O_h \in \mathbb{R}^{B \times T \times d_k}.
 $$
 
@@ -562,7 +616,7 @@ $$
 The final output is one Linear:
 
 $$
-Y = \operatorname{merge}(O) \, W_O \in \mathbb{R}^{B \times T \times d_{\text{model}}}.
+Y = \mathrm{merge}(O) \, W_O \in \mathbb{R}^{B \times T \times d_{\text{model}}}.
 $$
 
 This factorization was confirmed numerically: instantiating an MHA with
@@ -574,27 +628,27 @@ the same tensor (max absolute difference $0$).
 
 Given $\mathrm{d}Y$:
 
-1. **$W_O$ backward**: $Y = \operatorname{merge}(O) W_O$ is a Linear, so
+1. **$W_O$ backward**: $Y = \mathrm{merge}(O) W_O$ is a Linear, so
 
    $$
-   \mathrm{d}W_O = \operatorname{merge}(O)^{\top} \mathrm{d}Y,
+   \mathrm{d}W_O = \mathrm{merge}(O)^{\top} \mathrm{d}Y,
    \qquad
-   \mathrm{d}\operatorname{merge}(O) = \mathrm{d}Y \, W_O^{\top}.
+   \mathrm{d}\mathrm{merge}(O) = \mathrm{d}Y \, W_O^{\top}.
    $$
 
    (`mha.py:87-88`.)
 
-2. **Reshape**: apply `split` to $\mathrm{d}\operatorname{merge}(O)$ to get
+2. **Reshape**: apply `split` to $\mathrm{d}\mathrm{merge}(O)$ to get
    $\mathrm{d}O_h$ for each head. This is `mha.py:89`.
 
-3. **Per-head section&nbsp;3 backward**: for each $h$, run the single-head
-   backward of section&nbsp;3 with $V_h$, $A_h$, $K_h$, $Q_h$ in place of
+3. **Per-head section&nbsp;4 backward**: for each $h$, run the single-head
+   backward of section&nbsp;4 with $V_h$, $A_h$, $K_h$, $Q_h$ in place of
    $V, A, K, Q$. This yields $\mathrm{d}Q_h, \mathrm{d}K_h, \mathrm{d}V_h$ of
    shape $(B, T, d_k)$ each. The code does this in parallel across the head
    axis using 4D matmul (`mha.py:91-99`).
 
 4. **Reassemble**: merge the per-head gradients back into the original
-   layout, $\mathrm{d}(X W_Q) = \operatorname{merge}((\mathrm{d}Q_h)_h)$, then
+   layout, $\mathrm{d}(X W_Q) = \mathrm{merge}((\mathrm{d}Q_h)_h)$, then
    apply the Linear backward of $Q = X W_Q$:
 
    $$
@@ -623,7 +677,7 @@ over heads: each step ($A V$, the softmax jacobian, $QK^{\top}$, etc.) is
 done with a 4D matmul that contracts over the appropriate axis, and the
 result is identical to running $H$ independent single-head backwards.
 
-## 5. Adam update rule and bias correction
+## 6. Adam update rule and bias correction
 
 **Implementation:** [`src/transformer/optim.py:8-60`](../src/transformer/optim.py#L8-L60) (`Adam`, with `step` at `optim.py:39-60`).
 **Numerical check:** [`tests/test_optim.py::test_adam_converges_on_quadratic`](../tests/test_optim.py),
@@ -715,7 +769,7 @@ $$
 
 $$
 \theta_1 - \theta_0 = -\alpha \cdot \frac{g_1}{|g_1| + \varepsilon}
-\approx -\alpha \cdot \operatorname{sign}(g_1) \quad \text{when } \varepsilon \ll |g_1|.
+\approx -\alpha \cdot \mathrm{sign}(g_1) \quad \text{when } \varepsilon \ll |g_1|.
 $$
 
 So the first Adam step has magnitude approximately $\alpha$ in every
@@ -787,7 +841,7 @@ $\beta_1 = 0.9$, $\beta_2 = 0.999$, $\varepsilon = 10^{-8}$, no clipping. After
 500 steps the loss is below $10^{-6}$ and $w$ matches $w^\star$ to within
 $10^{-3}$.
 
-## 6. LR schedules: warmup and cosine decay
+## 7. LR schedules: warmup and cosine decay
 
 **Implementation:** [`src/transformer/schedule.py`](../src/transformer/schedule.py) (`cosine_warmup_lr`).
 **Numerical check:** [`tests/test_schedule.py`](../tests/test_schedule.py).
@@ -820,19 +874,19 @@ At $t = T$ we have $p_t = 1$ and $\cos \pi = -1$, so $\alpha_T = \alpha_{\min}$.
 
 ### Why warmup, specifically with Adam
 
-From section&nbsp;5, Adam's first step has the property
+From section&nbsp;6, Adam's first step has the property
 
 $$
 \theta_1 - \theta_0
 = -\alpha \cdot \frac{g_1}{\lvert g_1 \rvert + \varepsilon}
-\approx -\alpha \cdot \operatorname{sign}(g_1).
+\approx -\alpha \cdot \mathrm{sign}(g_1).
 $$
 
 The magnitude of this update is approximately $\alpha$ in every coordinate,
 *independent* of the actual gradient scale. That is desirable in steady
 state (it makes Adam robust to poorly scaled gradients) but dangerous at
 initialisation: $m_t$ and $v_t$ are zero-biased early on, and the
-direction encoded in $\operatorname{sign}(g_1)$ is informed only by a
+direction encoded in $\mathrm{sign}(g_1)$ is informed only by a
 single mini-batch's gradient. Taking $T_w$ updates at reduced rates lets
 the EMA estimates accumulate signal before steps reach full size. For SGD,
 where the update magnitude scales with $\lvert g \rvert$, this matters less.
@@ -863,7 +917,7 @@ midpoint $p_t = 1/2$ gives $\alpha_{\min} + \tfrac{1}{2}(\alpha - \alpha_{\min})
 (since $\cos(\pi/2) = 0$), $t = T$ gives $\alpha_{\min}$, and $t > T$ is
 clamped to $\alpha_{\min}$.
 
-## 7. Inverted dropout: expectation and gradient
+## 8. Inverted dropout: expectation and gradient
 
 **Implementation:** [`src/transformer/dropout.py`](../src/transformer/dropout.py) (`Dropout`).
 **Numerical check:** [`tests/test_dropout.py`](../tests/test_dropout.py).
@@ -925,7 +979,7 @@ $x = 7$ and applies dropout with $p = 0.3$. Empirical mean of the output
 matches $7$ to within $0.05$, confirming $\mathbb{E}[m \odot x] = x$
 across the realised mask.
 
-## 8. Weight tying: combining two gradient contributions
+## 9. Weight tying: combining two gradient contributions
 
 **Implementation:** [`src/transformer/model.py`](../src/transformer/model.py) (`Transformer`, `tie_weights=True`).
 **Numerical check:** [`tests/test_model.py::test_tie_weights_combined_gradient_matches_numerical`](../tests/test_model.py).
@@ -968,7 +1022,7 @@ batch.)
 
 **Output projection path.** $\text{logits} = X W^{\top} + c$ is a plain
 Linear with input $X$ and weight $W^{\top}$. Using the Linear backward
-identity from section&nbsp;3 (transposing for our orientation):
+identity from section&nbsp;1 (transposing for our orientation):
 
 $$
 \mathrm{d}W_{\text{out}} = (\mathrm{d}\,\text{logits})^{\top} \, X^{\text{final}}
