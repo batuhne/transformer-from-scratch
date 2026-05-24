@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from transformer.sampling import top_k_filter
+from transformer.linear import softmax
+from transformer.sampling import top_k_filter, top_p_filter
 
 
 def test_top_k_keeps_exactly_k_finite_logits() -> None:
@@ -25,3 +26,29 @@ def test_top_k_does_not_mutate_input() -> None:
     logits = np.array([1.0, 5.0, 2.0])
     top_k_filter(logits, k=1)
     assert np.array_equal(logits, np.array([1.0, 5.0, 2.0]))
+
+
+def test_top_p_kept_mass_reaches_p() -> None:
+    # probs after softmax: roughly [0.644, 0.236, 0.087, 0.032] for these logits
+    logits = np.log(np.array([0.60, 0.22, 0.10, 0.08]))
+    filtered = top_p_filter(logits, p=0.9)
+    kept = np.isfinite(filtered)
+    # Renormalized kept mass must cover at least p of the original distribution.
+    assert softmax(logits)[kept].sum() >= 0.9
+    # And the set must be minimal: dropping the last survivor would fall below p.
+    n_kept = int(kept.sum())
+    top_probs = np.sort(softmax(logits))[::-1]
+    assert top_probs[: n_kept - 1].sum() < 0.9
+
+
+def test_top_p_peaked_distribution_keeps_single_token() -> None:
+    logits = np.log(np.array([0.97, 0.02, 0.01]))
+    filtered = top_p_filter(logits, p=0.9)
+    assert int(np.isfinite(filtered).sum()) == 1
+    assert filtered[0] == logits[0]
+
+
+def test_top_p_does_not_mutate_input() -> None:
+    logits = np.array([1.0, 2.0, 3.0])
+    top_p_filter(logits, p=0.5)
+    assert np.array_equal(logits, np.array([1.0, 2.0, 3.0]))
