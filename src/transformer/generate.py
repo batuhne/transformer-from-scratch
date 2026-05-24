@@ -7,6 +7,20 @@ import numpy as np
 from transformer.data import CharVocab
 from transformer.linear import softmax
 from transformer.model import Transformer
+from transformer.sampling import top_k_filter
+
+
+def _sample(
+    logits: np.ndarray,
+    temperature: float,
+    top_k: int | None,
+    rng: np.random.Generator,
+) -> int:
+    logits = logits / temperature
+    if top_k is not None:
+        logits = top_k_filter(logits, top_k)
+    probs = softmax(logits)
+    return int(rng.choice(len(probs), p=probs))
 
 
 def generate(
@@ -15,6 +29,7 @@ def generate(
     start: str,
     max_new_tokens: int = 200,
     temperature: float = 0.8,
+    top_k: int | None = None,
     rng: np.random.Generator | None = None,
     use_cache: bool = False,
 ) -> str:
@@ -38,8 +53,7 @@ def generate(
         last_logits = logits[0, -1, :]
         position = len(indices)
         for _ in range(max_new_tokens):
-            probs = softmax(last_logits / temperature)
-            next_idx = int(rng.choice(len(probs), p=probs))
+            next_idx = _sample(last_logits, temperature, top_k, rng)
             indices.append(next_idx)
             logits, caches = model.forward_step(
                 np.array([[next_idx]]), caches, position=position
@@ -50,8 +64,7 @@ def generate(
         for _ in range(max_new_tokens):
             context = indices[-model.max_seq_len :]
             logits = model.forward(np.array([context]))
-            probs = softmax(logits[0, -1, :] / temperature)
-            next_idx = int(rng.choice(len(probs), p=probs))
+            next_idx = _sample(logits[0, -1, :], temperature, top_k, rng)
             indices.append(next_idx)
 
     return vocab.decode(indices)
