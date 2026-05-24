@@ -24,7 +24,7 @@ Validation is a contiguous 10% tail of the corpus, never seen during training.
 | Vocabulary | 58 characters |
 | Random baseline loss | ln(58) = 4.06 |
 | Trained val loss | ~2.16 |
-| Trained val perplexity | **8.85** |
+| Trained val perplexity | **~8.7** |
 | Training | 3000 steps, ~70s on CPU |
 
 ### Ablation: each modern feature vs a stable baseline
