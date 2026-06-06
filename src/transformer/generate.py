@@ -43,32 +43,37 @@ def generate(
     if temperature <= 0:
         raise ValueError("temperature must be positive")
 
+    was_training = [d.training for d in model.dropouts()]
     model.set_training(False)
-    indices = list(vocab.encode(start))
+    try:
+        indices = list(vocab.encode(start))
 
-    if use_cache:
-        if len(indices) + max_new_tokens > model.max_seq_len:
-            raise ValueError(
-                f"use_cache requires len(prompt)+max_new_tokens <= max_seq_len; "
-                f"got {len(indices)}+{max_new_tokens} > {model.max_seq_len}"
-            )
-        caches = model.init_caches()
-        logits, caches = model.forward_step(np.array([indices]), caches, position=0)
-        last_logits = logits[0, -1, :]
-        position = len(indices)
-        for _ in range(max_new_tokens):
-            next_idx = _sample(last_logits, temperature, top_k, top_p, rng)
-            indices.append(next_idx)
-            logits, caches = model.forward_step(
-                np.array([[next_idx]]), caches, position=position
-            )
-            last_logits = logits[0, 0, :]
-            position += 1
-    else:
-        for _ in range(max_new_tokens):
-            context = indices[-model.max_seq_len :]
-            logits = model.forward(np.array([context]))
-            next_idx = _sample(logits[0, -1, :], temperature, top_k, top_p, rng)
-            indices.append(next_idx)
+        if use_cache:
+            if len(indices) + max_new_tokens > model.max_seq_len:
+                raise ValueError(
+                    f"use_cache requires len(prompt)+max_new_tokens <= max_seq_len; "
+                    f"got {len(indices)}+{max_new_tokens} > {model.max_seq_len}"
+                )
+            caches = model.init_caches()
+            logits, caches = model.forward_step(np.array([indices]), caches, position=0)
+            last_logits = logits[0, -1, :]
+            position = len(indices)
+            for _ in range(max_new_tokens):
+                next_idx = _sample(last_logits, temperature, top_k, top_p, rng)
+                indices.append(next_idx)
+                logits, caches = model.forward_step(
+                    np.array([[next_idx]]), caches, position=position
+                )
+                last_logits = logits[0, 0, :]
+                position += 1
+        else:
+            for _ in range(max_new_tokens):
+                context = indices[-model.max_seq_len :]
+                logits = model.forward(np.array([context]))
+                next_idx = _sample(logits[0, -1, :], temperature, top_k, top_p, rng)
+                indices.append(next_idx)
 
-    return vocab.decode(indices)
+        return vocab.decode(indices)
+    finally:
+        for d, prev in zip(model.dropouts(), was_training):
+            d.training = prev

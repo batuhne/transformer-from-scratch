@@ -59,3 +59,12 @@ def test_generate_kv_cache_rejects_overlong_request() -> None:
     model, vocab = _tiny_setup()
     with pytest.raises(ValueError):
         generate(model, vocab, start="abc", max_new_tokens=10, use_cache=True)
+
+
+def test_generate_restores_training_state() -> None:
+    model, vocab = _tiny_setup()
+    model.set_training(True)
+    before = [d.training for d in model.dropouts()]
+    generate(model, vocab, start="a", max_new_tokens=2)
+    after = [d.training for d in model.dropouts()]
+    assert before == after == [True] * len(before)
