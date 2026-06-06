@@ -68,6 +68,17 @@ def test_forward_step_incremental_matches_forward() -> None:
     assert np.allclose(incremental, ref, atol=1e-10)
 
 
+def test_forward_step_records_attn_weights() -> None:
+    mha = MultiHeadAttention(d_model=8, n_heads=2)
+    # Prefill: 3 tokens, no cache. attn_weights: (B, n_heads, T_new, T_total).
+    _, K, V = mha.forward_step(np.random.randn(1, 3, 8), K_cache=None, V_cache=None)
+    assert mha.attn_weights is not None
+    assert mha.attn_weights.shape == (1, 2, 3, 3)
+    # Incremental: one new token attends to all 4 keys in the running cache.
+    mha.forward_step(np.random.randn(1, 1, 8), K_cache=K, V_cache=V)
+    assert mha.attn_weights.shape == (1, 2, 1, 4)
+
+
 def test_mha_attention_weights_respect_causal_mask() -> None:
     mha = MultiHeadAttention(d_model=8, n_heads=2)
     x = np.random.randn(1, 4, 8)

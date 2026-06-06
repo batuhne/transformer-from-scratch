@@ -94,6 +94,7 @@ class MultiHeadAttention:
             scores = np.where(mask, -1e9, scores)
 
         attn = softmax(scores)
+        self.attn_weights = attn
         out = self._merge_heads(attn @ V)
         return out @ self.W_O, K, V
 
