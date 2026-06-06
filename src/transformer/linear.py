@@ -7,7 +7,10 @@ import numpy as np
 
 def softmax(x: np.ndarray) -> np.ndarray:
     """Numerically stable softmax along the last axis."""
-    e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
+    x_max = np.max(x, axis=-1, keepdims=True)
+    if not np.all(np.isfinite(x_max)):
+        raise ValueError("softmax row has no finite element")
+    e_x = np.exp(x - x_max)
     return e_x / np.sum(e_x, axis=-1, keepdims=True)
 
 

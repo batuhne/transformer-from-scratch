@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from conftest import numerical_gradient, relative_error
 
-from transformer.linear import Linear, ReLU, cross_entropy_loss
+from transformer.linear import Linear, ReLU, cross_entropy_loss, softmax
 
 
 def test_linear_dW_db_dx_match_numerical_gradient() -> None:
@@ -64,3 +65,8 @@ def test_softmax_cross_entropy_gradient_matches_numerical() -> None:
 
     num_dlogits = numerical_gradient(loss_at, logits.copy())
     assert relative_error(dlogits, num_dlogits) < 1e-5
+
+
+def test_softmax_all_neg_inf_raises() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        softmax(np.array([-np.inf, -np.inf, -np.inf]))
