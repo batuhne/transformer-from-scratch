@@ -56,6 +56,11 @@ class Adam:
         for i, (obj, name) in enumerate(self.params):
             grad = getattr(obj, "d" + name)
             if grad is None:
+                if self.t == 1:
+                    raise RuntimeError(
+                        f"{type(obj).__name__}.d{name} is None on first step; "
+                        f"backward likely missing"
+                    )
                 continue
             if scale != 1.0:
                 grad = grad * scale

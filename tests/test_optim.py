@@ -49,8 +49,8 @@ def test_adam_bias_correction_first_step_matches_grad() -> None:
     assert np.allclose(p.W, 0.5 - 1.0 * (-1.0), atol=1e-12)
 
 
-def test_adam_skips_params_with_no_gradient() -> None:
-    """If dW is None, the parameter must remain unchanged."""
+def test_adam_raises_on_missing_grad_first_step() -> None:
+    """Missing gradient at t=1 means backward was never called: fail loud."""
 
     class _Param:
         W = np.array([1.0, 2.0])
@@ -58,8 +58,8 @@ def test_adam_skips_params_with_no_gradient() -> None:
 
     p = _Param()
     opt = Adam([(p, "W")], lr=0.1)
-    opt.step()
-    assert np.array_equal(p.W, np.array([1.0, 2.0]))
+    with pytest.raises(RuntimeError, match="backward likely missing"):
+        opt.step()
 
 
 def test_adam_global_scale_rescales_when_total_norm_exceeds_max() -> None:
