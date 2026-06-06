@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from transformer.linear import softmax
 from transformer.sampling import top_k_filter, top_p_filter
@@ -52,3 +53,24 @@ def test_top_p_does_not_mutate_input() -> None:
     logits = np.array([1.0, 2.0, 3.0])
     top_p_filter(logits, p=0.5)
     assert np.array_equal(logits, np.array([1.0, 2.0, 3.0]))
+
+
+@pytest.mark.parametrize("k", [0, -1, -100])
+def test_top_k_rejects_nonpositive_k(k: int) -> None:
+    with pytest.raises(ValueError, match="positive"):
+        top_k_filter(np.array([1.0, 2.0, 3.0]), k=k)
+
+
+@pytest.mark.parametrize("p", [0.0, -0.1, 1.5, 2.0])
+def test_top_p_rejects_out_of_range(p: float) -> None:
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        top_p_filter(np.array([1.0, 2.0, 3.0]), p=p)
+
+
+def test_top_p_stable_under_ties() -> None:
+    # Two equal-prob entries at the cutoff; stable sort guarantees deterministic
+    # selection regardless of numpy partition internals.
+    logits = np.array([2.0, 1.0, 1.0, 0.0])
+    a = top_p_filter(logits, p=0.5)
+    b = top_p_filter(logits, p=0.5)
+    assert np.array_equal(np.isneginf(a), np.isneginf(b))
