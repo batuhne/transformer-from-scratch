@@ -70,3 +70,12 @@ def test_softmax_cross_entropy_gradient_matches_numerical() -> None:
 def test_softmax_all_neg_inf_raises() -> None:
     with pytest.raises(ValueError, match="finite"):
         softmax(np.array([-np.inf, -np.inf, -np.inf]))
+
+
+def test_cross_entropy_stable_for_large_logits() -> None:
+    # Without logsumexp, exp(1000) overflows; loss should still be finite.
+    logits = np.array([[1000.0, 1001.0, 999.0]])
+    targets = np.array([1])
+    loss, dlogits = cross_entropy_loss(logits, targets)
+    assert np.isfinite(loss)
+    assert np.all(np.isfinite(dlogits))

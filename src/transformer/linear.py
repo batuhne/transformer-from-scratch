@@ -20,10 +20,13 @@ def cross_entropy_loss(
 ) -> tuple[float, np.ndarray]:
     """Mean cross-entropy; returns (loss, gradient w.r.t. logits)."""
     N = logits.shape[0]
-    probs = softmax(logits)
-    log_probs = -np.log(probs[np.arange(N), targets] + 1e-9)
-    loss = float(np.mean(log_probs))
-    dlogits = probs.copy()
+    z_max = np.max(logits, axis=-1, keepdims=True)
+    shifted = logits - z_max
+    log_sum_exp = np.log(np.sum(np.exp(shifted), axis=-1, keepdims=True))
+    log_probs = shifted - log_sum_exp
+    nll = -log_probs[np.arange(N), targets]
+    loss = float(np.mean(nll))
+    dlogits = np.exp(log_probs)
     dlogits[np.arange(N), targets] -= 1
     dlogits /= N
     return loss, dlogits
