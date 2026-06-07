@@ -126,6 +126,12 @@ model, vocab = load_pretrained("checkpoints/shakespeare_char.npz")
 print(generate(model, vocab, start="ROMEO:", max_new_tokens=200, temperature=0.8))
 ```
 
+Or train from scratch via the CLI (the default config matches the shipped model):
+
+```bash
+python -m transformer train --seed 42 --out checkpoints/model.npz
+```
+
 ## Math derivations
 
 [`docs/derivations.md`](docs/derivations.md) works through the gradient of every component by hand: softmax + cross-entropy, LayerNorm backward, attention gradients, the multi-head reshape, Adam with bias correction, the LR schedules, inverted dropout, and weight tying. Each derivation links to the source line that implements it.
