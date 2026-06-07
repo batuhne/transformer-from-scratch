@@ -62,7 +62,8 @@ def get_batch(
     """Random windows of length `seq_len`; returns (x, y=x shifted by 1)."""
     if rng is None:
         rng = np.random.default_rng()
-    max_start = len(data) - seq_len - 1
+    # rng.integers high is exclusive; this lets s reach len(data)-seq_len-1.
+    max_start = len(data) - seq_len
     starts = rng.integers(0, max_start, size=batch_size)
     x = np.stack([data[s : s + seq_len] for s in starts])
     y = np.stack([data[s + 1 : s + seq_len + 1] for s in starts])
