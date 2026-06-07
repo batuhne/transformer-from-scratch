@@ -203,6 +203,48 @@ def test_forward_step_incremental_matches_forward() -> None:
     assert np.allclose(incremental, ref, atol=1e-10)
 
 
+def test_registries_cover_every_param_and_dropout() -> None:
+    """params() and dropouts() must list every (W,dW) pair and Dropout reachable from model."""
+    from transformer.dropout import Dropout
+    model = Transformer(
+        vocab_size=7, d_model=8, n_heads=2, d_ff=16, n_layers=2, max_seq_len=16, dropout=0.1
+    )
+    registered_params = {(id(obj), name) for obj, name in model.params()}
+    registered_drops = {id(d) for d in model.dropouts()}
+
+    discovered_params: set[tuple[int, str]] = set()
+    discovered_drops: set[int] = set()
+
+    def walk(o: object, seen: set[int]) -> None:
+        if id(o) in seen or not hasattr(o, "__dict__"):
+            return
+        seen.add(id(o))
+        if isinstance(o, Dropout):
+            discovered_drops.add(id(o))
+        for k, v in vars(o).items():
+            # convention: a trainable array `name` always has a sibling `dname`.
+            if isinstance(v, np.ndarray) and not k.startswith("d") and hasattr(o, "d" + k):
+                discovered_params.add((id(o), k))
+            if isinstance(v, list):
+                for item in v:
+                    walk(item, seen)
+            elif not isinstance(v, (np.ndarray, dict, str, int, float, bool, type(None))):
+                walk(v, seen)
+
+    walk(model, set())
+    # tie_weights shares storage between embedding.W and output_proj.W; params()
+    # only lists embedding.W in that case, so allow the discovered output_proj.W.
+    if model.tie_weights:
+        discovered_params.discard((id(model.output_proj), "W"))
+
+    assert discovered_drops == registered_drops, (
+        f"dropouts() missing: {discovered_drops - registered_drops}"
+    )
+    assert discovered_params == registered_params, (
+        f"params() missing: {discovered_params - registered_params}"
+    )
+
+
 def test_model_eval_mode_is_deterministic_under_dropout() -> None:
     """Same input twice in eval mode produces identical logits even with dropout>0."""
     np.random.seed(0)
