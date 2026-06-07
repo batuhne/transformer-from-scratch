@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import numpy as np
 
 
@@ -33,10 +35,18 @@ def cross_entropy_loss(
 
 
 class Linear:
-    """Affine map y = x @ W + b with Xavier/Glorot init."""
+    """Affine map y = x @ W + b. Xavier init by default, He for ReLU inputs."""
 
-    def __init__(self, in_features: int, out_features: int) -> None:
-        scale = np.sqrt(2.0 / (in_features + out_features))
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        init: Literal["xavier", "he"] = "xavier",
+    ) -> None:
+        if init == "he":
+            scale = np.sqrt(2.0 / in_features)
+        else:
+            scale = np.sqrt(2.0 / (in_features + out_features))
         self.W = np.random.randn(in_features, out_features) * scale
         self.b = np.zeros(out_features)
         self.dW: np.ndarray | None = None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from conftest import numerical_gradient, relative_error
 
 from transformer.ffn import FeedForward
@@ -30,3 +31,10 @@ def test_ffn_dx_and_param_gradients_match_numerical() -> None:
 
         num_dW = numerical_gradient(loss_W, layer.W.copy())
         assert relative_error(layer.dW, num_dW) < 1e-5, f"{name} mismatch"
+
+
+def test_ffn_uses_he_init_scale() -> None:
+    d_model, d_ff = 64, 256
+    ffn = FeedForward(d_model=d_model, d_ff=d_ff)
+    assert np.std(ffn.linear1.W) == pytest.approx(np.sqrt(2.0 / d_model), rel=0.1)
+    assert np.std(ffn.linear2.W) == pytest.approx(np.sqrt(2.0 / d_ff), rel=0.1)

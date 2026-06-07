@@ -72,6 +72,13 @@ def test_softmax_all_neg_inf_raises() -> None:
         softmax(np.array([-np.inf, -np.inf, -np.inf]))
 
 
+def test_linear_init_scales() -> None:
+    xavier = Linear(64, 256)  # default
+    he = Linear(64, 256, init="he")
+    assert np.std(xavier.W) == pytest.approx(np.sqrt(2.0 / (64 + 256)), rel=0.1)
+    assert np.std(he.W) == pytest.approx(np.sqrt(2.0 / 64), rel=0.1)
+
+
 def test_cross_entropy_stable_for_large_logits() -> None:
     # Without logsumexp, exp(1000) overflows; loss should still be finite.
     logits = np.array([[1000.0, 1001.0, 999.0]])
