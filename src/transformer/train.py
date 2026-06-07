@@ -68,6 +68,9 @@ def train(
         raise ValueError(
             f"seq_len={config.seq_len} exceeds model.max_seq_len={model.max_seq_len}"
         )
+    # Independent child stream for eval batch sampling, so val_loss is
+    # decoupled from the exact point the training stream has reached.
+    eval_rng = rng.spawn(1)[0]
 
     optimizer = Adam(
         model.params(),
@@ -110,7 +113,7 @@ def train(
                 config.batch_size,
                 config.seq_len,
                 config.eval_batches,
-                rng,
+                eval_rng,
             )
             model.set_training(True)
             history.val_loss.append((step1, vl))
