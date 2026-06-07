@@ -79,6 +79,43 @@ def test_forward_step_records_attn_weights() -> None:
     assert mha.attn_weights.shape == (1, 2, 1, 4)
 
 
+def test_chunked_prefill_then_incremental_matches_full_forward() -> None:
+    """Prompt prefill (T_new=3) + 2 incremental steps must equal forward(T=5)."""
+    mha = MultiHeadAttention(d_model=8, n_heads=2)
+    x = np.random.randn(1, 5, 8)
+    ref = mha.forward(x, mask=causal_mask(5))
+
+    prefill_out, K, V = mha.forward_step(x[:, :3, :], K_cache=None, V_cache=None)
+    step3_out, K, V = mha.forward_step(x[:, 3:4, :], K_cache=K, V_cache=V)
+    step4_out, K, V = mha.forward_step(x[:, 4:5, :], K_cache=K, V_cache=V)
+    combined = np.concatenate([prefill_out, step3_out, step4_out], axis=1)
+    assert np.allclose(combined, ref, atol=1e-10)
+
+
+def test_chunked_prefill_split_equals_single_prefill() -> None:
+    """Prefilling 5 at once must equal prefilling (3, 2) sequentially."""
+    mha = MultiHeadAttention(d_model=8, n_heads=2)
+    x = np.random.randn(1, 5, 8)
+
+    full_out, K_full, V_full = mha.forward_step(x, K_cache=None, V_cache=None)
+
+    chunk1_out, K, V = mha.forward_step(x[:, :3, :], K_cache=None, V_cache=None)
+    chunk2_out, K, V = mha.forward_step(x[:, 3:, :], K_cache=K, V_cache=V)
+    split_out = np.concatenate([chunk1_out, chunk2_out], axis=1)
+
+    assert np.allclose(split_out, full_out, atol=1e-10)
+    assert np.allclose(K, K_full, atol=1e-10)
+    assert np.allclose(V, V_full, atol=1e-10)
+
+
+def test_chunked_step_attn_weights_shape() -> None:
+    """A T_new=2 step over a T_cache=3 cache yields attn_weights of shape (B,H,2,5)."""
+    mha = MultiHeadAttention(d_model=8, n_heads=2)
+    _, K, V = mha.forward_step(np.random.randn(1, 3, 8), K_cache=None, V_cache=None)
+    mha.forward_step(np.random.randn(1, 2, 8), K_cache=K, V_cache=V)
+    assert mha.attn_weights.shape == (1, 2, 2, 5)
+
+
 def test_mha_attention_weights_respect_causal_mask() -> None:
     mha = MultiHeadAttention(d_model=8, n_heads=2)
     x = np.random.randn(1, 4, 8)
