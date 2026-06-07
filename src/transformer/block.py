@@ -13,13 +13,20 @@ from transformer.mha import MultiHeadAttention
 class TransformerBlock:
     """Pre-LN block: y = x + drop(MHA(LN(x))); z = y + drop(FFN(LN(y)))."""
 
-    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.0) -> None:
+    def __init__(
+        self,
+        d_model: int,
+        n_heads: int,
+        d_ff: int,
+        dropout: float = 0.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
         self.ln1 = LayerNorm(d_model)
-        self.mha = MultiHeadAttention(d_model, n_heads, dropout=dropout)
-        self.drop1 = Dropout(dropout)
+        self.mha = MultiHeadAttention(d_model, n_heads, dropout=dropout, rng=rng)
+        self.drop1 = Dropout(dropout, rng=rng)
         self.ln2 = LayerNorm(d_model)
         self.ffn = FeedForward(d_model, d_ff)
-        self.drop2 = Dropout(dropout)
+        self.drop2 = Dropout(dropout, rng=rng)
 
     def forward(self, x: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:
         x = x + self.drop1.forward(self.mha.forward(self.ln1.forward(x), mask=mask))

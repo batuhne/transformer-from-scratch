@@ -11,7 +11,13 @@ from transformer.linear import softmax
 class MultiHeadAttention:
     """n_heads parallel scaled-dot-product attentions, concatenated + W_O."""
 
-    def __init__(self, d_model: int, n_heads: int, dropout: float = 0.0) -> None:
+    def __init__(
+        self,
+        d_model: int,
+        n_heads: int,
+        dropout: float = 0.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
         assert d_model % n_heads == 0, "d_model must be divisible by n_heads"
         self.d_model = d_model
         self.n_heads = n_heads
@@ -23,7 +29,7 @@ class MultiHeadAttention:
         self.W_V = np.random.randn(d_model, d_model) * scale
         self.W_O = np.random.randn(d_model, d_model) * scale
 
-        self.attn_dropout = Dropout(dropout)
+        self.attn_dropout = Dropout(dropout, rng=rng)
 
         self.dW_Q: np.ndarray | None = None
         self.dW_K: np.ndarray | None = None

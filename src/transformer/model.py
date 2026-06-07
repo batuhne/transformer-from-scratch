@@ -25,6 +25,7 @@ class Transformer:
         max_seq_len: int,
         dropout: float = 0.0,
         tie_weights: bool = False,
+        rng: np.random.Generator | None = None,
     ) -> None:
         self.vocab_size = vocab_size
         self.d_model = d_model
@@ -34,7 +35,8 @@ class Transformer:
         self.embedding = Embedding(vocab_size, d_model)
         self.pe = get_positional_encoding(max_seq_len, d_model)
         self.blocks = [
-            TransformerBlock(d_model, n_heads, d_ff, dropout=dropout) for _ in range(n_layers)
+            TransformerBlock(d_model, n_heads, d_ff, dropout=dropout, rng=rng)
+            for _ in range(n_layers)
         ]
         self.ln_final = LayerNorm(d_model)
         self.output_proj = Linear(d_model, vocab_size)

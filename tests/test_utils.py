@@ -23,6 +23,7 @@ def _one_run(seed: int) -> list[float]:
         n_layers=1,
         max_seq_len=8,
         dropout=0.1,
+        rng=rng,
     )
     config = TrainConfig(n_steps=30, batch_size=8, seq_len=8, lr=1e-2, log_every=0)
     return train(model, data, config, rng=rng).train_loss
