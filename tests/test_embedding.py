@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from conftest import numerical_gradient, relative_error
 
 from transformer.embedding import Embedding, get_positional_encoding
@@ -32,3 +33,8 @@ def test_positional_encoding_shape_and_bounds() -> None:
     # Row 0: sin(0)=0 in even cols, cos(0)=1 in odd cols
     assert np.allclose(pe[0, 0::2], 0.0)
     assert np.allclose(pe[0, 1::2], 1.0)
+
+
+def test_positional_encoding_rejects_odd_d_model() -> None:
+    with pytest.raises(ValueError, match="even"):
+        get_positional_encoding(max_seq_len=8, d_model=7)

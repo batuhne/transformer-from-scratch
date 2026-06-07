@@ -27,6 +27,8 @@ class Embedding:
 
 def get_positional_encoding(max_seq_len: int, d_model: int) -> np.ndarray:
     """Fixed sinusoidal positional encoding (Vaswani et al., 2017)."""
+    if d_model % 2:
+        raise ValueError(f"d_model must be even (sin/cos pairs), got {d_model}")
     pe = np.zeros((max_seq_len, d_model))
     position = np.arange(max_seq_len)[:, np.newaxis]
     div_term = np.exp(np.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))
