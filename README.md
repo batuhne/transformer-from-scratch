@@ -117,6 +117,15 @@ jupyter notebook notebooks/demo.ipynb
 pytest -q
 ```
 
+Use the shipped checkpoint without re-training:
+
+```python
+from transformer import load_pretrained, generate
+
+model, vocab = load_pretrained("checkpoints/shakespeare_char.npz")
+print(generate(model, vocab, start="ROMEO:", max_new_tokens=200, temperature=0.8))
+```
+
 ## Math derivations
 
 [`docs/derivations.md`](docs/derivations.md) works through the gradient of every component by hand: softmax + cross-entropy, LayerNorm backward, attention gradients, the multi-head reshape, Adam with bias correction, the LR schedules, inverted dropout, and weight tying. Each derivation links to the source line that implements it.
