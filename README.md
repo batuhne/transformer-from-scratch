@@ -42,6 +42,8 @@ Single seed, same data and budget, one feature toggled per row (see [`experiment
 
 Dropout is the biggest single win on this corpus; weight decay alone does not help and only pays off stacked with other regularization.
 
+All rows use a single seed, so treat the magnitudes as directional rather than exact. On a corpus this small, seed-to-seed variance is large enough that near-ties (the LR schedule and weight-tying rows, for instance) should not be read as a real ranking; a rigorous comparison would repeat each config across several seeds and report mean and standard deviation.
+
 ### KV-cache speedup
 
 Incremental decoding caches each layer's K and V, turning per-step work from O(T^2) into O(T). The advantage grows with context length (see [`experiments/bench_kv_cache.py`](experiments/bench_kv_cache.py)).
