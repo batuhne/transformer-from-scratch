@@ -12,7 +12,7 @@ class Embedding:
         self.W = np.random.randn(vocab_size, d_model) * 0.02
         self.vocab_size = vocab_size
         self.dW: np.ndarray | None = None
-        self.indices: np.ndarray | None = None
+        self.indices: np.ndarray
 
     def forward(self, indices: np.ndarray) -> np.ndarray:
         """Look up embeddings for token indices of shape (B, T)."""

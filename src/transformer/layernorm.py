@@ -16,8 +16,8 @@ class LayerNorm:
         self.dgamma: np.ndarray | None = None
         self.dbeta: np.ndarray | None = None
 
-        self.x_hat: np.ndarray | None = None
-        self.std_inv: np.ndarray | None = None
+        self.x_hat: np.ndarray
+        self.std_inv: np.ndarray
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         mean = np.mean(x, axis=-1, keepdims=True)

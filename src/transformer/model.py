@@ -63,7 +63,7 @@ class Transformer:
         indices: np.ndarray,
         caches: list[dict[str, np.ndarray] | None],
         position: int,
-    ) -> tuple[np.ndarray, list[dict[str, np.ndarray]]]:
+    ) -> tuple[np.ndarray, list[dict[str, np.ndarray] | None]]:
         """Incremental forward; `position` is the absolute pos of the first new token."""
         T_new = indices.shape[1]
         if position + T_new > self.max_seq_len:
@@ -71,7 +71,7 @@ class Transformer:
                 f"position+T_new={position + T_new} exceeds max_seq_len={self.max_seq_len}"
             )
         x = self.embedding.forward(indices) + self.pe[position : position + T_new]
-        new_caches: list[dict[str, np.ndarray]] = []
+        new_caches: list[dict[str, np.ndarray] | None] = []
         for block, cache in zip(self.blocks, caches):
             x, new_cache = block.forward_step(x, cache)
             new_caches.append(new_cache)
@@ -87,6 +87,7 @@ class Transformer:
         if self.tie_weights:
             # Shared W collects gradient from both the lookup and the output
             # projection; fold the projection contribution into embedding.dW.
+            assert self.embedding.dW is not None and self.output_proj.dW is not None
             self.embedding.dW += self.output_proj.dW.T
 
     def params(self) -> list[tuple[object, str]]:

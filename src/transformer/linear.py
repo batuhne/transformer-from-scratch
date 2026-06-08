@@ -51,7 +51,7 @@ class Linear:
         self.b = np.zeros(out_features)
         self.dW: np.ndarray | None = None
         self.db: np.ndarray | None = None
-        self.x: np.ndarray | None = None
+        self.x: np.ndarray
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         self.x = x
@@ -69,7 +69,7 @@ class ReLU:
     """Rectified linear activation."""
 
     def __init__(self) -> None:
-        self.mask: np.ndarray | None = None
+        self.mask: np.ndarray
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         self.mask = (x > 0).astype(x.dtype)

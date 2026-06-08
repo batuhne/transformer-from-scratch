@@ -36,13 +36,13 @@ class MultiHeadAttention:
         self.dW_V: np.ndarray | None = None
         self.dW_O: np.ndarray | None = None
 
-        self.x: np.ndarray | None = None
-        self.Q: np.ndarray | None = None
-        self.K: np.ndarray | None = None
-        self.V: np.ndarray | None = None
-        self.attn_weights: np.ndarray | None = None
-        self.attn_post: np.ndarray | None = None
-        self.attn_output: np.ndarray | None = None
+        self.x: np.ndarray
+        self.Q: np.ndarray
+        self.K: np.ndarray
+        self.V: np.ndarray
+        self.attn_weights: np.ndarray
+        self.attn_post: np.ndarray
+        self.attn_output: np.ndarray
 
     def _split_heads(self, x: np.ndarray) -> np.ndarray:
         """(B, T, d_model) -> (B, n_heads, T, d_k)."""

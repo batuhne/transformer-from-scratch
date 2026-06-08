@@ -27,11 +27,11 @@ class SingleHeadAttention:
         self.dW_K: np.ndarray | None = None
         self.dW_V: np.ndarray | None = None
 
-        self.x: np.ndarray | None = None
-        self.Q: np.ndarray | None = None
-        self.K: np.ndarray | None = None
-        self.V: np.ndarray | None = None
-        self.attn_weights: np.ndarray | None = None
+        self.x: np.ndarray
+        self.Q: np.ndarray
+        self.K: np.ndarray
+        self.V: np.ndarray
+        self.attn_weights: np.ndarray
 
     def forward(self, x: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:
         self.x = x
