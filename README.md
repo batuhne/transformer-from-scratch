@@ -23,8 +23,8 @@ Validation is a contiguous 10% tail of the corpus, never seen during training.
 | Parameters | 153,082 |
 | Vocabulary | 58 characters |
 | Random baseline loss | ln(58) = 4.06 |
-| Trained val loss | ~2.16 |
-| Trained val perplexity | **~8.7** |
+| Trained val loss | ~2.19 |
+| Trained val perplexity | **~8.9** |
 | Training | 3000 steps, ~70s on CPU |
 
 ### Ablation: each modern feature vs a stable baseline
@@ -128,7 +128,7 @@ model, vocab = load_pretrained("checkpoints/shakespeare_char.npz")
 print(generate(model, vocab, start="ROMEO:", max_new_tokens=200, temperature=0.8))
 ```
 
-Or train from scratch via the CLI (the default config matches the shipped model):
+Or train from scratch via the CLI. With the default seed this reproduces the shipped checkpoint:
 
 ```bash
 python -m transformer train --seed 42 --out checkpoints/model.npz
