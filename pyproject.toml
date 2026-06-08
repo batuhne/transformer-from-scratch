@@ -25,3 +25,9 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 [tool.black]
 line-length = 100
 target-version = ["py39"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+disallow_any_generics = false  # numpy: bare np.ndarray is idiomatic
+warn_return_any = false  # numpy operations legitimately return Any
