@@ -61,10 +61,10 @@ def plot_all_heads(
     """Grid of every head's attention map for one layer."""
     attn, tokens = _weights_and_tokens(model, vocab, prompt, layer)
     n_heads = attn.shape[0]
-    fig, axes = plt.subplots(1, n_heads, figsize=(3.2 * n_heads, 3.4))
+    fig, axes = plt.subplots(1, n_heads, figsize=(3.2 * n_heads, 3.4), squeeze=False)
     for h in range(n_heads):
-        _draw(axes[h], attn[h], tokens, fontsize=6)
-        axes[h].set_title(f"head {h}")
+        _draw(axes[0, h], attn[h], tokens, fontsize=6)
+        axes[0, h].set_title(f"head {h}")
     fig.suptitle(f"Block {layer}: attention per head")
     fig.tight_layout()
     return fig

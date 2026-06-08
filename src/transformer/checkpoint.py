@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -39,7 +40,7 @@ def save_weights(
     config: dict | None = None,
 ) -> None:
     """Write trainable params to `path`. If `vocab` or `config` given, embed as meta."""
-    arrays: dict[str, np.ndarray] = {
+    arrays: dict[str, Any] = {
         _key(i, obj, name): getattr(obj, name)
         for i, (obj, name) in enumerate(model.params())
     }
