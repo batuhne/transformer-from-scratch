@@ -45,3 +45,18 @@ jobs:
           DEMO_STEPS: "50"
         run: |
           jupyter nbconvert --to notebook --execute --output-dir /tmp --ExecutePreprocessor.timeout=300 notebooks/demo.ipynb
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy matplotlib mypy
+          pip install -e .
+      - name: Type check
+        run: mypy src
