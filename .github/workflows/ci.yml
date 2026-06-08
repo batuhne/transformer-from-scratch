@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy matplotlib pytest ruff
+          pip install -c constraints.txt numpy matplotlib pytest ruff
           pip install -e .
       - name: Lint
         run: ruff check .
@@ -37,7 +37,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy matplotlib nbconvert ipykernel
+          pip install -c constraints.txt numpy matplotlib nbconvert ipykernel
           pip install -e .
       - name: Smoke test demo notebook
         env:
@@ -56,7 +56,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy matplotlib mypy
+          pip install -c constraints.txt numpy matplotlib mypy
           pip install -e .
       - name: Type check
         run: mypy src

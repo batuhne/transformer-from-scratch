@@ -1,0 +1,8 @@
+# Pinned CI toolchain for reproducible builds (applied via pip install -c in ci.yml).
+ipykernel==6.31.0
+matplotlib==3.9.4
+mypy==1.19.1
+nbconvert==7.17.0
+numpy==2.0.2
+pytest==8.4.2
+ruff==0.15.13
