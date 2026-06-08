@@ -21,6 +21,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install numpy matplotlib pytest ruff
+          pip install -e .
       - name: Lint
         run: ruff check .
       - name: Test
