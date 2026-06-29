@@ -30,3 +30,10 @@ def test_plot_all_heads_creates_one_axis_per_head() -> None:
     model, vocab = _setup()
     fig = plot_all_heads(model, vocab, prompt="abc", layer=0)
     assert len(fig.axes) == 2
+
+
+def test_plot_attention_restores_training_state() -> None:
+    model, vocab = _setup()
+    model.set_training(True)
+    plot_attention(model, vocab, prompt="abcd")
+    assert all(d.training for d in model.dropouts())

@@ -39,9 +39,8 @@ class TransformerBlock:
         kv_cache: dict[str, np.ndarray] | None,
     ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
         """Incremental block forward; dropout skipped (eval-only path)."""
-        K_in = kv_cache["K"] if kv_cache is not None else None
-        V_in = kv_cache["V"] if kv_cache is not None else None
-        attn_out, K_new, V_new = self.mha.forward_step(self.ln1.forward(x), K_in, V_in)
+        kv = (kv_cache["K"], kv_cache["V"]) if kv_cache is not None else None
+        attn_out, K_new, V_new = self.mha.forward_step(self.ln1.forward(x), kv)
         x = x + attn_out
         x = x + self.ffn.forward(self.ln2.forward(x))
         return x, {"K": K_new, "V": V_new}

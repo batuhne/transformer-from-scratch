@@ -150,7 +150,7 @@ python -m transformer train --seed 42 --out checkpoints/model.npz
 
 ## Math derivations
 
-[`docs/derivations.md`](docs/derivations.md) works through the gradient of every component by hand: softmax + cross-entropy, LayerNorm backward, attention gradients, the multi-head reshape, Adam with bias correction, the LR schedules, inverted dropout, and weight tying. Each derivation links to the source line that implements it.
+[`docs/derivations.md`](docs/derivations.md) works through the gradient of every component by hand: softmax + cross-entropy, LayerNorm backward, attention gradients, the multi-head reshape, Adam with bias correction, the LR schedules, inverted dropout, and weight tying. Each derivation names the function that implements it.
 
 ## Notebooks
 
@@ -164,6 +164,8 @@ python -m transformer train --seed 42 --out checkpoints/model.npz
 | 06 | Transformer Model | Assembling the full model |
 | 07 | Training & Generation | Training loop and sampling |
 | -- | demo.ipynb | End-to-end showcase using `src/` |
+
+Notebooks 01-07 are self-contained re-implementations that build a baseline transformer for teaching; they import nothing from `src/`. The library hardens that baseline for real training: weight tying, dropout, AdamW with global-norm clipping, a warmup plus cosine schedule, KV-cached decoding, and a log-space cross-entropy. `demo.ipynb` uses the finished `src/` package.
 
 ## License
 

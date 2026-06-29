@@ -17,11 +17,16 @@ def _weights_and_tokens(
     prompt: str,
     layer: int,
 ) -> tuple[np.ndarray, list[str]]:
+    was_training = [d.training for d in model.dropouts()]
     model.set_training(False)
-    model.forward(np.array([vocab.encode(prompt)]))
-    attn = model.blocks[layer].mha.attn_weights[0]
-    tokens = [c if c != "\n" else "\\n" for c in prompt]
-    return attn, tokens
+    try:
+        model.forward(np.array([vocab.encode(prompt)]))
+        attn = model.blocks[layer].mha.attn_weights[0]
+        tokens = [c if c != "\n" else "\\n" for c in prompt]
+        return attn, tokens
+    finally:
+        for d, prev in zip(model.dropouts(), was_training):
+            d.training = prev
 
 
 def _draw(ax: Axes, weights: np.ndarray, tokens: list[str], fontsize: int) -> None:

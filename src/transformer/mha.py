@@ -75,21 +75,22 @@ class MultiHeadAttention:
     def forward_step(
         self,
         x: np.ndarray,
-        K_cache: np.ndarray | None,
-        V_cache: np.ndarray | None,
+        kv_cache: tuple[np.ndarray, np.ndarray] | None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Incremental attention; appends `x`'s K,V to caches. Returns (out, K, V)."""
         Q = self._split_heads(x @ self.W_Q)
         K_new = self._split_heads(x @ self.W_K)
         V_new = self._split_heads(x @ self.W_V)
 
-        if K_cache is not None:
+        if kv_cache is not None:
+            K_cache, V_cache = kv_cache
             K = np.concatenate([K_cache, K_new], axis=2)
             V = np.concatenate([V_cache, V_new], axis=2)
+            T_cache = K_cache.shape[2]
         else:
             K, V = K_new, V_new
+            T_cache = 0
 
-        T_cache = K_cache.shape[2] if K_cache is not None else 0
         T_new = x.shape[1]
         T_total = T_cache + T_new
 

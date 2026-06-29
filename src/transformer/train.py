@@ -94,6 +94,8 @@ def train(
         logits = model.forward(x)
         B, T, V = logits.shape
         loss, dlogits_flat = cross_entropy_loss(logits.reshape(-1, V), y.reshape(-1))
+        if not np.isfinite(loss):
+            raise RuntimeError(f"loss is not finite ({loss}) at step {step + 1}")
         history.train_loss.append(loss)
 
         model.backward(dlogits_flat.reshape(B, T, V))
@@ -107,15 +109,17 @@ def train(
 
         if val_data is not None and config.eval_every and step1 % config.eval_every == 0:
             model.set_training(False)
-            vl = eval_loss(
-                model,
-                val_data,
-                config.batch_size,
-                config.seq_len,
-                config.eval_batches,
-                eval_rng,
-            )
-            model.set_training(True)
+            try:
+                vl = eval_loss(
+                    model,
+                    val_data,
+                    config.batch_size,
+                    config.seq_len,
+                    config.eval_batches,
+                    eval_rng,
+                )
+            finally:
+                model.set_training(True)
             history.val_loss.append((step1, vl))
             if config.log_every:
                 print(f"step {step1:5d}/{config.n_steps} | val_loss {vl:.4f}")

@@ -50,7 +50,7 @@ def test_forward_step_bulk_matches_forward() -> None:
     mha = MultiHeadAttention(d_model=8, n_heads=2)
     x = np.random.randn(2, 5, 8)
     ref = mha.forward(x, mask=causal_mask(5))
-    out, K, V = mha.forward_step(x, K_cache=None, V_cache=None)
+    out, K, V = mha.forward_step(x, None)
     assert np.allclose(out, ref, atol=1e-10)
     assert K.shape == (2, 2, 5, 4) and V.shape == (2, 2, 5, 4)
 
@@ -59,10 +59,11 @@ def test_forward_step_incremental_matches_forward() -> None:
     mha = MultiHeadAttention(d_model=8, n_heads=2)
     x = np.random.randn(1, 5, 8)
     ref = mha.forward(x, mask=causal_mask(5))
-    K_cache, V_cache = None, None
+    kv = None
     outs = []
     for t in range(5):
-        out_t, K_cache, V_cache = mha.forward_step(x[:, t : t + 1, :], K_cache, V_cache)
+        out_t, k, v = mha.forward_step(x[:, t : t + 1, :], kv)
+        kv = (k, v)
         outs.append(out_t)
     incremental = np.concatenate(outs, axis=1)
     assert np.allclose(incremental, ref, atol=1e-10)
@@ -71,11 +72,11 @@ def test_forward_step_incremental_matches_forward() -> None:
 def test_forward_step_records_attn_weights() -> None:
     mha = MultiHeadAttention(d_model=8, n_heads=2)
     # Prefill: 3 tokens, no cache. attn_weights: (B, n_heads, T_new, T_total).
-    _, K, V = mha.forward_step(np.random.randn(1, 3, 8), K_cache=None, V_cache=None)
+    _, K, V = mha.forward_step(np.random.randn(1, 3, 8), None)
     assert mha.attn_weights is not None
     assert mha.attn_weights.shape == (1, 2, 3, 3)
     # Incremental: one new token attends to all 4 keys in the running cache.
-    mha.forward_step(np.random.randn(1, 1, 8), K_cache=K, V_cache=V)
+    mha.forward_step(np.random.randn(1, 1, 8), (K, V))
     assert mha.attn_weights.shape == (1, 2, 1, 4)
 
 
@@ -85,9 +86,9 @@ def test_chunked_prefill_then_incremental_matches_full_forward() -> None:
     x = np.random.randn(1, 5, 8)
     ref = mha.forward(x, mask=causal_mask(5))
 
-    prefill_out, K, V = mha.forward_step(x[:, :3, :], K_cache=None, V_cache=None)
-    step3_out, K, V = mha.forward_step(x[:, 3:4, :], K_cache=K, V_cache=V)
-    step4_out, K, V = mha.forward_step(x[:, 4:5, :], K_cache=K, V_cache=V)
+    prefill_out, K, V = mha.forward_step(x[:, :3, :], None)
+    step3_out, K, V = mha.forward_step(x[:, 3:4, :], (K, V))
+    step4_out, K, V = mha.forward_step(x[:, 4:5, :], (K, V))
     combined = np.concatenate([prefill_out, step3_out, step4_out], axis=1)
     assert np.allclose(combined, ref, atol=1e-10)
 
@@ -97,10 +98,10 @@ def test_chunked_prefill_split_equals_single_prefill() -> None:
     mha = MultiHeadAttention(d_model=8, n_heads=2)
     x = np.random.randn(1, 5, 8)
 
-    full_out, K_full, V_full = mha.forward_step(x, K_cache=None, V_cache=None)
+    full_out, K_full, V_full = mha.forward_step(x, None)
 
-    chunk1_out, K, V = mha.forward_step(x[:, :3, :], K_cache=None, V_cache=None)
-    chunk2_out, K, V = mha.forward_step(x[:, 3:, :], K_cache=K, V_cache=V)
+    chunk1_out, K, V = mha.forward_step(x[:, :3, :], None)
+    chunk2_out, K, V = mha.forward_step(x[:, 3:, :], (K, V))
     split_out = np.concatenate([chunk1_out, chunk2_out], axis=1)
 
     assert np.allclose(split_out, full_out, atol=1e-10)
@@ -111,8 +112,8 @@ def test_chunked_prefill_split_equals_single_prefill() -> None:
 def test_chunked_step_attn_weights_shape() -> None:
     """A T_new=2 step over a T_cache=3 cache yields attn_weights of shape (B,H,2,5)."""
     mha = MultiHeadAttention(d_model=8, n_heads=2)
-    _, K, V = mha.forward_step(np.random.randn(1, 3, 8), K_cache=None, V_cache=None)
-    mha.forward_step(np.random.randn(1, 2, 8), K_cache=K, V_cache=V)
+    _, K, V = mha.forward_step(np.random.randn(1, 3, 8), None)
+    mha.forward_step(np.random.randn(1, 2, 8), (K, V))
     assert mha.attn_weights.shape == (1, 2, 2, 5)
 
 

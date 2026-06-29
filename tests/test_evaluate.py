@@ -43,3 +43,10 @@ def test_perplexity_rejects_too_short_data() -> None:
     model, _ = _setup()
     with pytest.raises(ValueError):
         perplexity(model, np.arange(5), batch_size=1, seq_len=8)
+
+
+def test_perplexity_restores_training_state() -> None:
+    model, data = _setup()
+    model.set_training(True)
+    perplexity(model, data, batch_size=4, seq_len=8)
+    assert all(d.training for d in model.dropouts())

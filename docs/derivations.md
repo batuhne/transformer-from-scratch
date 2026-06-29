@@ -13,19 +13,19 @@ explicit by the bounds.
 
 | # | Section | Implementation | Numerical check |
 |---|---------|----------------|-----------------|
-| 1 | [Linear and ReLU](#1-linear-and-relu-the-building-blocks) | [`linear.py:29-63`](../src/transformer/linear.py#L29-L63) | [`test_linear.py`](../tests/test_linear.py) |
-| 2 | [Softmax and cross-entropy](#2-softmax-and-cross-entropy-the-combined-gradient) | [`linear.py:8-34`](../src/transformer/linear.py#L8-L34) | [`test_linear.py`](../tests/test_linear.py) |
-| 3 | [LayerNorm backward](#3-layernorm-backward) | [`layernorm.py:8-48`](../src/transformer/layernorm.py#L8-L48) | [`test_layernorm.py`](../tests/test_layernorm.py) |
-| 4 | [Attention gradients](#4-scaled-dot-product-attention-gradients-in-matrix-form) | [`attention.py:19-88`](../src/transformer/attention.py#L19-L88) | [`test_attention.py`](../tests/test_attention.py) |
-| 5 | [Multi-head reshape](#5-multi-head-reshape-in-tensor-index-notation) | [`mha.py:10-110`](../src/transformer/mha.py#L10-L110) | [`test_mha.py`](../tests/test_mha.py) |
-| 6 | [Adam + bias correction](#6-adam-update-rule-and-bias-correction) | [`optim.py:8-60`](../src/transformer/optim.py#L8-L60) | [`test_optim.py`](../tests/test_optim.py) |
+| 1 | [Linear and ReLU](#1-linear-and-relu-the-building-blocks) | [`linear.py`](../src/transformer/linear.py) | [`test_linear.py`](../tests/test_linear.py) |
+| 2 | [Softmax and cross-entropy](#2-softmax-and-cross-entropy-the-combined-gradient) | [`linear.py`](../src/transformer/linear.py) | [`test_linear.py`](../tests/test_linear.py) |
+| 3 | [LayerNorm backward](#3-layernorm-backward) | [`layernorm.py`](../src/transformer/layernorm.py) | [`test_layernorm.py`](../tests/test_layernorm.py) |
+| 4 | [Attention gradients](#4-scaled-dot-product-attention-gradients-in-matrix-form) | [`attention.py`](../src/transformer/attention.py) | [`test_attention.py`](../tests/test_attention.py) |
+| 5 | [Multi-head reshape](#5-multi-head-reshape-in-tensor-index-notation) | [`mha.py`](../src/transformer/mha.py) | [`test_mha.py`](../tests/test_mha.py) |
+| 6 | [Adam + bias correction](#6-adam-update-rule-and-bias-correction) | [`optim.py`](../src/transformer/optim.py) | [`test_optim.py`](../tests/test_optim.py) |
 | 7 | [LR schedules: warmup + cosine](#7-lr-schedules-warmup-and-cosine-decay) | [`schedule.py`](../src/transformer/schedule.py) | [`test_schedule.py`](../tests/test_schedule.py) |
 | 8 | [Inverted dropout](#8-inverted-dropout-expectation-and-gradient) | [`dropout.py`](../src/transformer/dropout.py) | [`test_dropout.py`](../tests/test_dropout.py) |
 | 9 | [Weight tying](#9-weight-tying-combining-two-gradient-contributions) | [`model.py`](../src/transformer/model.py) | [`test_model.py`](../tests/test_model.py) |
 
 ## 1. Linear and ReLU: the building blocks
 
-**Implementation:** [`src/transformer/linear.py:29-63`](../src/transformer/linear.py#L29-L63) (`Linear`, `ReLU`).
+**Implementation:** [`src/transformer/linear.py`](../src/transformer/linear.py) (`Linear`, `ReLU`).
 **Numerical check:** [`tests/test_linear.py`](../tests/test_linear.py).
 
 Every parameterized layer reduces to these two primitives. The FFN is literally
@@ -53,7 +53,7 @@ $$
 \mathrm{d}X = \mathrm{d}Y \, W^{\top}.
 $$
 
-This is `Linear.backward` (`linear.py:44-49`); the leading `reshape(-1, ...)`
+This is `Linear.backward` (`linear.py`); the leading `reshape(-1, ...)`
 just folds batch and sequence axes together so the same 2D identity applies.
 
 ### ReLU
@@ -78,7 +78,7 @@ between; no new calculus. The test checks $\mathrm{d}W_1, \mathrm{d}b_1,
 
 ## 2. Softmax and cross-entropy: the combined gradient
 
-**Implementation:** [`src/transformer/linear.py:8-34`](../src/transformer/linear.py#L8-L34) (`softmax`, `cross_entropy_loss`).
+**Implementation:** [`src/transformer/linear.py`](../src/transformer/linear.py) (`softmax`, `cross_entropy_loss`).
 **Numerical check:** [`tests/test_linear.py::test_softmax_cross_entropy_gradient_matches_numerical`](../tests/test_linear.py).
 
 ### Setup
@@ -162,10 +162,10 @@ $$
 \frac{\partial L}{\partial z^{(n)}_j} = \frac{1}{N} \left( p^{(n)}_j - \delta_{t^{(n)} j} \right).
 $$
 
-This matches `linear.py:31-33`:
+This matches `cross_entropy_loss` (which works in log space, so `p = exp(log_probs)`):
 
 ```python
-dlogits = probs.copy()
+dlogits = np.exp(log_probs)
 dlogits[np.arange(N), targets] -= 1
 dlogits /= N
 ```
@@ -190,7 +190,7 @@ the threshold.
 
 ## 3. LayerNorm backward
 
-**Implementation:** [`src/transformer/layernorm.py:8-48`](../src/transformer/layernorm.py#L8-L48) (`LayerNorm`).
+**Implementation:** [`src/transformer/layernorm.py`](../src/transformer/layernorm.py) (`LayerNorm`).
 **Numerical check:** [`tests/test_layernorm.py::test_layernorm_dx_matches_numerical`](../tests/test_layernorm.py)
 and `::test_layernorm_dgamma_dbeta_match_numerical`.
 
@@ -246,7 +246,7 @@ $$
 $$
 
 For a batch of tokens, $\mathrm{d}\gamma$ and $\mathrm{d}\beta$ sum over the
-batch axis (`layernorm.py:39-40`). $\gamma$ and $\beta$ are shared across all
+batch axis (`layernorm.py`). $\gamma$ and $\beta$ are shared across all
 positions, so every token contributes to their gradient.
 
 ### The Jacobian of $\hat{x}$ with respect to $x$
@@ -330,7 +330,7 @@ $$
 }
 $$
 
-This matches `layernorm.py:44-48` line for line:
+This matches `LayerNorm.backward` line for line:
 
 ```python
 return self.std_inv * (                                # 1/sigma
@@ -363,7 +363,7 @@ its numerical counterpart with absolute error $\approx 3.5 \times 10^{-10}$.
 
 ## 4. Scaled dot-product attention: gradients in matrix form
 
-**Implementation:** [`src/transformer/attention.py:19-88`](../src/transformer/attention.py#L19-L88) (`SingleHeadAttention`).
+**Implementation:** [`src/transformer/attention.py`](../src/transformer/attention.py) (`SingleHeadAttention`).
 **Numerical check:** [`tests/test_attention.py::test_attention_projection_gradients_match_numerical`](../tests/test_attention.py)
 and `::test_attention_dx_matches_numerical`.
 
@@ -446,7 +446,7 @@ $$
 }
 $$
 
-This matches `attention.py:75-77`:
+This matches `SingleHeadAttention.backward`:
 
 ```python
 sum_term = np.sum(d_attn * self.attn_weights, axis=-1, keepdims=True)
@@ -473,7 +473,7 @@ $$
 \mathrm{d}S' = \frac{\mathrm{d}S}{\sqrt{d_k}} = \frac{\mathrm{d}\tilde S}{\sqrt{d_k}}.
 $$
 
-This is `attention.py:78` (`d_scores /= np.sqrt(self.d_k)`).
+This is `attention.py` (`d_scores /= np.sqrt(self.d_k)`).
 
 ### Backward through $S' = Q K^{\top}$
 
@@ -503,7 +503,7 @@ $$
 \mathrm{d}K = (\mathrm{d}S')^{\top} \, Q.
 $$
 
-Both lines match `attention.py:80-81`.
+Both lines match `attention.py`.
 
 ### Backward through the projections
 
@@ -524,7 +524,7 @@ $$
 \mathrm{d}X = \mathrm{d}Q \, W_Q^{\top} + \mathrm{d}K \, W_K^{\top} + \mathrm{d}V \, W_V^{\top}.
 $$
 
-This is `attention.py:83-88`. The reshape `x_flat = x.reshape(-1, d_model)`
+This is in `SingleHeadAttention.backward`. The reshape `x_flat = x.reshape(-1, d_model)`
 just folds the batch and sequence axes together so the same identity applies.
 
 ### Numerical check (sketch)
@@ -538,7 +538,7 @@ relative error below $1.3 \times 10^{-9}$.
 
 ## 5. Multi-head reshape in tensor index notation
 
-**Implementation:** [`src/transformer/mha.py:10-110`](../src/transformer/mha.py#L10-L110) (`MultiHeadAttention`).
+**Implementation:** [`src/transformer/mha.py`](../src/transformer/mha.py) (`MultiHeadAttention`).
 **Numerical check:** [`tests/test_mha.py::test_mha_projection_gradients_match_numerical`](../tests/test_mha.py),
 `::test_mha_dx_matches_numerical`,
 `::test_mha_attention_weights_respect_causal_mask`.
@@ -636,16 +636,16 @@ Given $\mathrm{d}Y$:
    \mathrm{d}\mathrm{merge}(O) = \mathrm{d}Y \, W_O^{\top}.
    $$
 
-   (`mha.py:87-88`.)
+   (`mha.py`.)
 
 2. **Reshape**: apply `split` to $\mathrm{d}\mathrm{merge}(O)$ to get
-   $\mathrm{d}O_h$ for each head. This is `mha.py:89`.
+   $\mathrm{d}O_h$ for each head. This is the `_split_heads` call.
 
 3. **Per-head section&nbsp;4 backward**: for each $h$, run the single-head
    backward of section&nbsp;4 with $V_h$, $A_h$, $K_h$, $Q_h$ in place of
    $V, A, K, Q$. This yields $\mathrm{d}Q_h, \mathrm{d}K_h, \mathrm{d}V_h$ of
    shape $(B, T, d_k)$ each. The code does this in parallel across the head
-   axis using 4D matmul (`mha.py:91-99`).
+   axis using 4D matmul (`mha.py`).
 
 4. **Reassemble**: merge the per-head gradients back into the original
    layout, $\mathrm{d}(X W_Q) = \mathrm{merge}((\mathrm{d}Q_h)_h)$, then
@@ -662,7 +662,7 @@ Given $\mathrm{d}Y$:
    \mathrm{d}X = \mathrm{d}(X W_Q) W_Q^{\top} + \mathrm{d}(X W_K) W_K^{\top} + \mathrm{d}(X W_V) W_V^{\top}.
    $$
 
-   (`mha.py:101-110`.)
+   (`mha.py`.)
 
 ### Numerical check (sketch)
 
@@ -679,7 +679,7 @@ result is identical to running $H$ independent single-head backwards.
 
 ## 6. Adam update rule and bias correction
 
-**Implementation:** [`src/transformer/optim.py:8-60`](../src/transformer/optim.py#L8-L60) (`Adam`, with `step` at `optim.py:39-60`).
+**Implementation:** [`src/transformer/optim.py`](../src/transformer/optim.py) (`Adam`, with `step` at `optim.py`).
 **Numerical check:** [`tests/test_optim.py::test_adam_converges_on_quadratic`](../tests/test_optim.py),
 `::test_adam_bias_correction_first_step_matches_grad`.
 
