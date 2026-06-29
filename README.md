@@ -67,7 +67,7 @@ Every head in block 0, fed a short prompt. The lower-triangular shape confirms t
 - **Modern training stack**: inverted dropout, weight tying, AdamW (decoupled weight decay), global-norm gradient clipping, linear warmup + cosine LR schedule
 - **Inference**: KV-cached generation, temperature, top-k, and top-p (nucleus) sampling
 - **Evaluation**: deterministic token-weighted perplexity over the full validation set
-- **Reproducibility**: seeded runs produce bit-identical loss curves
+- **Reproducibility**: a fixed seed reproduces the same loss curve on a given machine and numpy build
 
 ## Architecture
 
@@ -128,7 +128,7 @@ model, vocab = load_pretrained("checkpoints/shakespeare_char.npz")
 print(generate(model, vocab, start="ROMEO:", max_new_tokens=200, temperature=0.8))
 ```
 
-Or train from scratch via the CLI. With the default seed this reproduces the shipped checkpoint:
+Or train from scratch via the CLI. On the same machine and numpy build, the default seed reproduces the shipped checkpoint:
 
 ```bash
 python -m transformer train --seed 42 --out checkpoints/model.npz
