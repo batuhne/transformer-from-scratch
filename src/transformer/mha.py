@@ -6,6 +6,7 @@ import numpy as np
 
 from transformer.dropout import Dropout
 from transformer.linear import softmax
+from transformer.utils import randn
 
 
 class MultiHeadAttention:
@@ -24,10 +25,10 @@ class MultiHeadAttention:
         self.d_k = d_model // n_heads
 
         scale = np.sqrt(2.0 / (d_model + self.d_k))
-        self.W_Q = np.random.randn(d_model, d_model) * scale
-        self.W_K = np.random.randn(d_model, d_model) * scale
-        self.W_V = np.random.randn(d_model, d_model) * scale
-        self.W_O = np.random.randn(d_model, d_model) * scale
+        self.W_Q = randn(rng, d_model, d_model) * scale
+        self.W_K = randn(rng, d_model, d_model) * scale
+        self.W_V = randn(rng, d_model, d_model) * scale
+        self.W_O = randn(rng, d_model, d_model) * scale
 
         self.attn_dropout = Dropout(dropout, rng=rng)
 

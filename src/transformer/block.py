@@ -25,7 +25,7 @@ class TransformerBlock:
         self.mha = MultiHeadAttention(d_model, n_heads, dropout=dropout, rng=rng)
         self.drop1 = Dropout(dropout, rng=rng)
         self.ln2 = LayerNorm(d_model)
-        self.ffn = FeedForward(d_model, d_ff)
+        self.ffn = FeedForward(d_model, d_ff, rng=rng)
         self.drop2 = Dropout(dropout, rng=rng)
 
     def forward(self, x: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:

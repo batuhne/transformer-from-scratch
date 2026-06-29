@@ -6,6 +6,8 @@ from typing import Literal
 
 import numpy as np
 
+from transformer.utils import randn
+
 
 def softmax(x: np.ndarray) -> np.ndarray:
     """Numerically stable softmax along the last axis."""
@@ -42,12 +44,13 @@ class Linear:
         in_features: int,
         out_features: int,
         init: Literal["xavier", "he"] = "xavier",
+        rng: np.random.Generator | None = None,
     ) -> None:
         if init == "he":
             scale = np.sqrt(2.0 / in_features)
         else:
             scale = np.sqrt(2.0 / (in_features + out_features))
-        self.W = np.random.randn(in_features, out_features) * scale
+        self.W = randn(rng, in_features, out_features) * scale
         self.b = np.zeros(out_features)
         self.dW: np.ndarray | None = None
         self.db: np.ndarray | None = None

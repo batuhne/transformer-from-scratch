@@ -32,14 +32,14 @@ class Transformer:
         self.max_seq_len = max_seq_len
         self.tie_weights = tie_weights
 
-        self.embedding = Embedding(vocab_size, d_model)
+        self.embedding = Embedding(vocab_size, d_model, rng=rng)
         self.pe = get_positional_encoding(max_seq_len, d_model)
         self.blocks = [
             TransformerBlock(d_model, n_heads, d_ff, dropout=dropout, rng=rng)
             for _ in range(n_layers)
         ]
         self.ln_final = LayerNorm(d_model)
-        self.output_proj = Linear(d_model, vocab_size)
+        self.output_proj = Linear(d_model, vocab_size, rng=rng)
         if tie_weights:
             # output_proj.W becomes a transposed view of embedding.W: the two
             # share storage, so in-place Adam updates to embedding.W propagate.

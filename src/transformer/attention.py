@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from transformer.linear import softmax
+from transformer.utils import randn
 
 
 def causal_mask(seq_len: int) -> np.ndarray:
@@ -16,11 +17,11 @@ def causal_mask(seq_len: int) -> np.ndarray:
 class SingleHeadAttention:
     """Scaled dot-product attention: softmax(QK^T / sqrt(d_k)) V."""
 
-    def __init__(self, d_model: int, d_k: int) -> None:
+    def __init__(self, d_model: int, d_k: int, rng: np.random.Generator | None = None) -> None:
         scale = np.sqrt(2.0 / (d_model + d_k))
-        self.W_Q = np.random.randn(d_model, d_k) * scale
-        self.W_K = np.random.randn(d_model, d_k) * scale
-        self.W_V = np.random.randn(d_model, d_k) * scale
+        self.W_Q = randn(rng, d_model, d_k) * scale
+        self.W_K = randn(rng, d_model, d_k) * scale
+        self.W_V = randn(rng, d_model, d_k) * scale
         self.d_k = d_k
 
         self.dW_Q: np.ndarray | None = None

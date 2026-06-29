@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import numpy as np
 
+from transformer.utils import randn
+
 
 class Embedding:
     """Learnable token embedding lookup."""
 
-    def __init__(self, vocab_size: int, d_model: int) -> None:
-        self.W = np.random.randn(vocab_size, d_model) * 0.02
+    def __init__(
+        self, vocab_size: int, d_model: int, rng: np.random.Generator | None = None
+    ) -> None:
+        self.W = randn(rng, vocab_size, d_model) * 0.02
         self.vocab_size = vocab_size
         self.dW: np.ndarray | None = None
         self.indices: np.ndarray
