@@ -14,6 +14,20 @@ The goal is **implementation correctness**, not text quality: this is a readable
 
 This repo demonstrates that a transformer's forward and backward passes, optimizer, and decoding loop can be written from first principles and verified. On a tiny corpus (~10K characters) a 153K-parameter character model cannot produce real English; it learns character statistics and Shakespearean structure (line breaks, `Name:` speaker tags, vowel/consonant rhythm) and outputs word-shaped text. That is the expected result for a model this size on data this small, and the numbers below show it genuinely learns.
 
+A sample from the shipped checkpoint (`start="ROMEO:"`, temperature 0.8):
+
+```text
+ROMEO:
+O I whe wick the el bellly?
+
+MENENIUS:
+Sen:
+We borat in that as seve pury mey?
+
+First Citizen:
+Hout fould wate sat wat ist fit belly dises one it the
+```
+
 ## Results
 
 Validation is a contiguous 10% tail of the corpus, never seen during training.
@@ -29,7 +43,7 @@ Validation is a contiguous 10% tail of the corpus, never seen during training.
 
 ### Ablation: each modern feature vs a stable baseline
 
-Single seed, same data and budget, one feature toggled per row (see [`experiments/ablations.ipynb`](experiments/ablations.ipynb)).
+Single seed, same data and budget, one feature toggled per row (see [`experiments/ablations.ipynb`](experiments/ablations.ipynb)). These perplexities are `exp(mean cross-entropy)` over random validation windows, not the deterministic full-set perplexity in Results, so the two tables are not directly comparable.
 
 | Config | Val perplexity |
 |--------|---------------|
