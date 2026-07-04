@@ -68,6 +68,8 @@ Incremental decoding caches each layer's K and V, turning per-step work from O(T
 | 128 | 3.2x |
 | 256 | 7.5x |
 
+Measured on CPU with an untrained model (timing is weight-independent); absolute multipliers vary by machine.
+
 ## Learned attention
 
 Every head in block 0, fed a short prompt. The lower-triangular shape confirms the causal mask, and each head learns a distinct mix of local and positional attention.

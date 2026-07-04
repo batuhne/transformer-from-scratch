@@ -41,8 +41,7 @@ def save_weights(
 ) -> None:
     """Write trainable params to `path`. If `vocab` or `config` given, embed as meta."""
     arrays: dict[str, Any] = {
-        _key(i, obj, name): getattr(obj, name)
-        for i, (obj, name) in enumerate(model.params())
+        _key(i, obj, name): getattr(obj, name) for i, (obj, name) in enumerate(model.params())
     }
     if config is None:
         config = _model_config(model)
@@ -63,8 +62,7 @@ def load_weights(model: Transformer, path: str | Path) -> None:
         source = data[key]
         if target.shape != source.shape:
             raise ValueError(
-                f"shape mismatch for {key}: model has {target.shape}, "
-                f"checkpoint has {source.shape}"
+                f"shape mismatch for {key}: model has {target.shape}, checkpoint has {source.shape}"
             )
         target[...] = source
 

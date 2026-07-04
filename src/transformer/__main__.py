@@ -59,8 +59,9 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--lr", type=float, default=1e-3)
     t.add_argument("--seed", type=int, default=42)
     t.add_argument("--dropout", type=float, default=0.1)
-    t.add_argument("--tie-weights", action=argparse.BooleanOptionalAction,
-                   default=True, dest="tie_weights")
+    t.add_argument(
+        "--tie-weights", action=argparse.BooleanOptionalAction, default=True, dest="tie_weights"
+    )
     t.add_argument("--d-model", type=int, default=64, dest="d_model")
     t.add_argument("--n-heads", type=int, default=4, dest="n_heads")
     t.add_argument("--d-ff", type=int, default=256, dest="d_ff")

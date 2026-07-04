@@ -113,9 +113,7 @@ def test_model_set_training_toggles_every_dropout() -> None:
 
 
 def test_tie_weights_reduces_param_count_by_vocab_times_d_model() -> None:
-    kwargs = dict(
-        vocab_size=11, d_model=8, n_heads=2, d_ff=16, n_layers=2, max_seq_len=16
-    )
+    kwargs = dict(vocab_size=11, d_model=8, n_heads=2, d_ff=16, n_layers=2, max_seq_len=16)
     untied = Transformer(**kwargs, tie_weights=False)
     tied = Transformer(**kwargs, tie_weights=True)
     assert untied.count_params() - tied.count_params() == 11 * 8
@@ -123,7 +121,12 @@ def test_tie_weights_reduces_param_count_by_vocab_times_d_model() -> None:
 
 def test_tie_weights_shares_storage_between_embedding_and_output_proj() -> None:
     model = Transformer(
-        vocab_size=11, d_model=8, n_heads=2, d_ff=16, n_layers=1, max_seq_len=16,
+        vocab_size=11,
+        d_model=8,
+        n_heads=2,
+        d_ff=16,
+        n_layers=1,
+        max_seq_len=16,
         tie_weights=True,
     )
     assert np.shares_memory(model.embedding.W, model.output_proj.W)
@@ -134,7 +137,12 @@ def test_tie_weights_combined_gradient_matches_numerical() -> None:
     np.random.seed(0)
     vocab_size = 5
     model = Transformer(
-        vocab_size=vocab_size, d_model=4, n_heads=2, d_ff=8, n_layers=1, max_seq_len=8,
+        vocab_size=vocab_size,
+        d_model=4,
+        n_heads=2,
+        d_ff=8,
+        n_layers=1,
+        max_seq_len=8,
         tie_weights=True,
     )
     indices = np.random.randint(0, vocab_size, size=(2, 3))
@@ -161,7 +169,12 @@ def test_tie_weights_persists_through_adam_step() -> None:
     np.random.seed(0)
     vocab_size = 5
     model = Transformer(
-        vocab_size=vocab_size, d_model=4, n_heads=2, d_ff=8, n_layers=1, max_seq_len=8,
+        vocab_size=vocab_size,
+        d_model=4,
+        n_heads=2,
+        d_ff=8,
+        n_layers=1,
+        max_seq_len=8,
         tie_weights=True,
     )
     indices = np.random.randint(0, vocab_size, size=(2, 3))
@@ -206,6 +219,7 @@ def test_forward_step_incremental_matches_forward() -> None:
 def test_registries_cover_every_param_and_dropout() -> None:
     """params() and dropouts() must list every (W,dW) pair and Dropout reachable from model."""
     from transformer.dropout import Dropout
+
     model = Transformer(
         vocab_size=7, d_model=8, n_heads=2, d_ff=16, n_layers=2, max_seq_len=16, dropout=0.1
     )

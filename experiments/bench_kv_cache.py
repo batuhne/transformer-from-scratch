@@ -20,8 +20,7 @@ def time_generate(model, vocab, prompt, max_new, *, use_cache, trials=3) -> floa
     for trial in range(trials):
         rng = np.random.default_rng(trial)
         t0 = time.perf_counter()
-        generate(model, vocab, prompt, max_new_tokens=max_new,
-                 use_cache=use_cache, rng=rng)
+        generate(model, vocab, prompt, max_new_tokens=max_new, use_cache=use_cache, rng=rng)
         times.append(time.perf_counter() - t0)
     return float(np.mean(times))
 
@@ -35,18 +34,25 @@ def main() -> None:
         set_seed(42)
         model = Transformer(
             vocab_size=vocab.size,
-            d_model=64, n_heads=4, d_ff=256, n_layers=3,
+            d_model=64,
+            n_heads=4,
+            d_ff=256,
+            n_layers=3,
             max_seq_len=max_seq_len,
         )
         max_new = max_seq_len - len(prompt) - 1
-        generate(model, vocab, prompt, max_new_tokens=5,
-                 use_cache=False, rng=np.random.default_rng(0))
-        generate(model, vocab, prompt, max_new_tokens=5,
-                 use_cache=True, rng=np.random.default_rng(0))
+        generate(
+            model, vocab, prompt, max_new_tokens=5, use_cache=False, rng=np.random.default_rng(0)
+        )
+        generate(
+            model, vocab, prompt, max_new_tokens=5, use_cache=True, rng=np.random.default_rng(0)
+        )
         no = time_generate(model, vocab, prompt, max_new, use_cache=False)
         yes = time_generate(model, vocab, prompt, max_new, use_cache=True)
-        print(f"{max_seq_len:>5d} {no * 1000:>10.1f} ms {yes * 1000:>8.1f} ms "
-              f"{no / yes:>8.2f}x {max_new / yes:>14.1f}")
+        print(
+            f"{max_seq_len:>5d} {no * 1000:>10.1f} ms {yes * 1000:>8.1f} ms "
+            f"{no / yes:>8.2f}x {max_new / yes:>14.1f}"
+        )
 
 
 if __name__ == "__main__":

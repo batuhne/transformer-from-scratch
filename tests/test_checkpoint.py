@@ -14,8 +14,13 @@ from transformer.model import Transformer
 
 def _model(tie: bool = False) -> Transformer:
     return Transformer(
-        vocab_size=7, d_model=8, n_heads=2, d_ff=16, n_layers=2,
-        max_seq_len=8, tie_weights=tie,
+        vocab_size=7,
+        d_model=8,
+        n_heads=2,
+        d_ff=16,
+        n_layers=2,
+        max_seq_len=8,
+        tie_weights=tie,
     )
 
 
@@ -46,8 +51,13 @@ def test_load_rejects_shape_mismatch(tmp_path: Path) -> None:
     save_weights(a, tmp_path / "w.npz")
     # Smaller model: same architecture except d_model differs, so shapes mismatch.
     b = Transformer(
-        vocab_size=7, d_model=4, n_heads=2, d_ff=8, n_layers=2,
-        max_seq_len=8, tie_weights=False,
+        vocab_size=7,
+        d_model=4,
+        n_heads=2,
+        d_ff=8,
+        n_layers=2,
+        max_seq_len=8,
+        tie_weights=False,
     )
     with pytest.raises(ValueError, match="shape mismatch"):
         load_weights(b, tmp_path / "w.npz")
@@ -58,8 +68,13 @@ def test_load_rejects_missing_key(tmp_path: Path) -> None:
     save_weights(a, tmp_path / "w.npz")
     # Different layer count produces a different param list, so some indices miss.
     b = Transformer(
-        vocab_size=7, d_model=8, n_heads=2, d_ff=16, n_layers=3,
-        max_seq_len=8, tie_weights=False,
+        vocab_size=7,
+        d_model=8,
+        n_heads=2,
+        d_ff=16,
+        n_layers=3,
+        max_seq_len=8,
+        tie_weights=False,
     )
     with pytest.raises(KeyError):
         load_weights(b, tmp_path / "w.npz")

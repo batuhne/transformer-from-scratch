@@ -10,9 +10,7 @@ from transformer.model import Transformer
 
 
 def _setup() -> tuple[Transformer, np.ndarray]:
-    model = Transformer(
-        vocab_size=7, d_model=8, n_heads=2, d_ff=16, n_layers=1, max_seq_len=8
-    )
+    model = Transformer(vocab_size=7, d_model=8, n_heads=2, d_ff=16, n_layers=1, max_seq_len=8)
     data = np.arange(7).repeat(20) % 7
     return model, data
 

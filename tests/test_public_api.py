@@ -25,6 +25,16 @@ def test_public_api_imports() -> None:
     )
 
     # Sanity: each is a callable or class, none are None.
-    for obj in (CharVocab, Transformer, TrainConfig, generate, load_pretrained,
-                perplexity, set_seed, top_k_filter, top_p_filter, train):
+    for obj in (
+        CharVocab,
+        Transformer,
+        TrainConfig,
+        generate,
+        load_pretrained,
+        perplexity,
+        set_seed,
+        top_k_filter,
+        top_p_filter,
+        train,
+    ):
         assert obj is not None

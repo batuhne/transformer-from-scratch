@@ -23,7 +23,9 @@ jobs:
           pip install -c constraints.txt numpy matplotlib pytest ruff
           pip install -e .
       - name: Lint
-        run: ruff check .
+        run: |
+          ruff check .
+          ruff format --check .
       - name: Test
         run: pytest -q
 

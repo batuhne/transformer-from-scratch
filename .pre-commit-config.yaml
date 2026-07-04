@@ -7,6 +7,12 @@ repos:
         language: system
         types: [python]
         require_serial: true
+      - id: ruff-format
+        name: ruff-format
+        entry: ruff format --check
+        language: system
+        types: [python]
+        require_serial: true
       - id: pytest
         name: pytest
         entry: pytest -q

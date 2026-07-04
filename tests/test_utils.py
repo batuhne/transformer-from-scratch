@@ -48,6 +48,7 @@ def test_train_loss_is_invariant_to_eval_cadence() -> None:
     eval_every shifted every subsequent training batch. With a spawned eval rng,
     train_loss is identical regardless of eval cadence.
     """
+
     def _run(eval_every: int) -> list[float]:
         rng = set_seed(123)
         text = "abcabcabcabc" * 200
@@ -55,12 +56,23 @@ def test_train_loss_is_invariant_to_eval_cadence() -> None:
         data = np.array(vocab.encode(text), dtype=np.int64)
         val = data[-64:]
         model = Transformer(
-            vocab_size=vocab.size, d_model=16, n_heads=2, d_ff=32,
-            n_layers=1, max_seq_len=8, dropout=0.1, rng=rng,
+            vocab_size=vocab.size,
+            d_model=16,
+            n_heads=2,
+            d_ff=32,
+            n_layers=1,
+            max_seq_len=8,
+            dropout=0.1,
+            rng=rng,
         )
         config = TrainConfig(
-            n_steps=30, batch_size=8, seq_len=8, lr=1e-2,
-            log_every=0, eval_every=eval_every, eval_batches=3,
+            n_steps=30,
+            batch_size=8,
+            seq_len=8,
+            lr=1e-2,
+            log_every=0,
+            eval_every=eval_every,
+            eval_batches=3,
         )
         return train(model, data, config, val_data=val, rng=rng).train_loss
 

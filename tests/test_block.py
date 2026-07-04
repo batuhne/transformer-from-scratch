@@ -58,9 +58,7 @@ def test_block_ffn_gradient_matches_numerical(layer_attr: str, param: str) -> No
         return float(np.sum(block.forward(x, mask=mask) * dout))
 
     num = numerical_gradient(loss, getattr(target, param).copy())
-    assert relative_error(analytical, num) < 1e-5, (
-        f"ffn.{layer_attr}.{param} gradient mismatch"
-    )
+    assert relative_error(analytical, num) < 1e-5, f"ffn.{layer_attr}.{param} gradient mismatch"
 
 
 def test_block_residual_propagates_input_gradient() -> None:

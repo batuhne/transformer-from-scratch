@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from transformer.dropout import Dropout
-from transformer.linear import softmax
+from transformer.linear import softmax, softmax_backward
 from transformer.utils import randn
 
 
@@ -19,7 +19,8 @@ class MultiHeadAttention:
         dropout: float = 0.0,
         rng: np.random.Generator | None = None,
     ) -> None:
-        assert d_model % n_heads == 0, "d_model must be divisible by n_heads"
+        if d_model % n_heads != 0:
+            raise ValueError(f"d_model {d_model} must be divisible by n_heads {n_heads}")
         self.d_model = d_model
         self.n_heads = n_heads
         self.d_k = d_model // n_heads
@@ -118,8 +119,7 @@ class MultiHeadAttention:
 
         d_attn = self.attn_dropout.backward(d_attn_post)
 
-        sum_term = np.sum(d_attn * self.attn_weights, axis=-1, keepdims=True)
-        d_scores = self.attn_weights * (d_attn - sum_term)
+        d_scores = softmax_backward(d_attn, self.attn_weights)
         d_scores /= np.sqrt(self.d_k)
 
         dQ = d_scores @ self.K

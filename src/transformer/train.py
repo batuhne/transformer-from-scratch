@@ -65,9 +65,7 @@ def train(
     if rng is None:
         rng = np.random.default_rng()
     if config.seq_len > model.max_seq_len:
-        raise ValueError(
-            f"seq_len={config.seq_len} exceeds model.max_seq_len={model.max_seq_len}"
-        )
+        raise ValueError(f"seq_len={config.seq_len} exceeds model.max_seq_len={model.max_seq_len}")
     # Independent child stream for eval batch sampling, so val_loss is
     # decoupled from the exact point the training stream has reached.
     eval_rng = rng.spawn(1)[0]

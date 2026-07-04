@@ -18,6 +18,12 @@ def softmax(x: np.ndarray) -> np.ndarray:
     return e_x / np.sum(e_x, axis=-1, keepdims=True)
 
 
+def softmax_backward(d_out: np.ndarray, softmax_out: np.ndarray) -> np.ndarray:
+    """Gradient of a row-wise softmax: A * (dA - sum(dA * A))."""
+    sum_term = np.sum(d_out * softmax_out, axis=-1, keepdims=True)
+    return softmax_out * (d_out - sum_term)
+
+
 def cross_entropy_loss(
     logits: np.ndarray,
     targets: np.ndarray,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from transformer.linear import softmax
+from transformer.linear import softmax, softmax_backward
 from transformer.utils import randn
 
 
@@ -15,7 +15,7 @@ def causal_mask(seq_len: int) -> np.ndarray:
 
 
 class SingleHeadAttention:
-    """Scaled dot-product attention: softmax(QK^T / sqrt(d_k)) V."""
+    """Scaled dot-product attention (teaching reference; the model uses MultiHeadAttention)."""
 
     def __init__(self, d_model: int, d_k: int, rng: np.random.Generator | None = None) -> None:
         scale = np.sqrt(2.0 / (d_model + d_k))
@@ -53,9 +53,7 @@ class SingleHeadAttention:
         d_attn = dout @ self.V.transpose(0, 2, 1)
         dV = self.attn_weights.transpose(0, 2, 1) @ dout
 
-        # Softmax jacobian, row-wise: dS = A * (dA - sum_j(dA_j * A_j))
-        sum_term = np.sum(d_attn * self.attn_weights, axis=-1, keepdims=True)
-        d_scores = self.attn_weights * (d_attn - sum_term)
+        d_scores = softmax_backward(d_attn, self.attn_weights)
         d_scores /= np.sqrt(self.d_k)
 
         dQ = d_scores @ self.K

@@ -87,7 +87,8 @@ class Transformer:
         if self.tie_weights:
             # Shared W collects gradient from both the lookup and the output
             # projection; fold the projection contribution into embedding.dW.
-            assert self.embedding.dW is not None and self.output_proj.dW is not None
+            if self.embedding.dW is None or self.output_proj.dW is None:
+                raise RuntimeError("backward must run before folding tied-weight gradients")
             self.embedding.dW += self.output_proj.dW.T
 
     def params(self) -> list[tuple[object, str]]:

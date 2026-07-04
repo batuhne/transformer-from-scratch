@@ -9,6 +9,9 @@ description = "Decoder-only transformer implemented from scratch in NumPy"
 requires-python = ">=3.9"
 dependencies = ["numpy>=1.25", "matplotlib>=3.7"]
 
+[project.scripts]
+transformer = "transformer.__main__:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
@@ -22,10 +25,6 @@ extend-exclude = ["notebooks/", "*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
-
-[tool.black]
-line-length = 100
-target-version = ["py39"]
 
 [tool.mypy]
 strict = true

@@ -48,10 +48,24 @@ def test_generate_rejects_nonpositive_temperature() -> None:
 
 def test_generate_kv_cache_matches_no_cache() -> None:
     model, vocab = _tiny_setup()
-    a = generate(model, vocab, start="ab", max_new_tokens=4,
-                 temperature=1.0, rng=np.random.default_rng(0), use_cache=False)
-    b = generate(model, vocab, start="ab", max_new_tokens=4,
-                 temperature=1.0, rng=np.random.default_rng(0), use_cache=True)
+    a = generate(
+        model,
+        vocab,
+        start="ab",
+        max_new_tokens=4,
+        temperature=1.0,
+        rng=np.random.default_rng(0),
+        use_cache=False,
+    )
+    b = generate(
+        model,
+        vocab,
+        start="ab",
+        max_new_tokens=4,
+        temperature=1.0,
+        rng=np.random.default_rng(0),
+        use_cache=True,
+    )
     assert a == b
 
 

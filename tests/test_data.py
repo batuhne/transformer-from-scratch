@@ -61,10 +61,12 @@ def test_get_batch_reaches_largest_valid_start() -> None:
 def test_get_batch_no_index_overflow_on_largest_start() -> None:
     # Sanity: at the new upper bound, y slice must stay inside data.
     data = np.arange(8, dtype=np.int64)
+
     # Custom rng forced to return start = len-seq_len-1 = 3.
     class _FixedRng:
         def integers(self, low, high, size):
             return np.full(size, high - 1, dtype=np.int64)
+
     x, y = get_batch(data, batch_size=2, seq_len=4, rng=_FixedRng())
     assert x.shape == y.shape == (2, 4)
     assert np.array_equal(x[0], data[3:7])
