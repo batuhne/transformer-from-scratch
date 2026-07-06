@@ -15,6 +15,12 @@ def test_charvocab_roundtrip() -> None:
     assert vocab.decode(vocab.encode(s)) == s
 
 
+def test_encode_rejects_unknown_char() -> None:
+    vocab = CharVocab.from_text("abc")
+    with pytest.raises(KeyError, match="not in the vocabulary"):
+        vocab.encode("axc")
+
+
 def test_charvocab_chars_sorted_for_determinism() -> None:
     vocab1 = CharVocab.from_text("bca")
     vocab2 = CharVocab.from_text("acb")

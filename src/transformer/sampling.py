@@ -25,6 +25,8 @@ def top_p_filter(logits: np.ndarray, p: float) -> np.ndarray:
     """Keep the smallest set of tokens with cumulative prob >= p; mask rest. 1D only."""
     if not 0.0 < p <= 1.0:
         raise ValueError(f"top_p must be in (0, 1], got {p}")
+    if logits.ndim != 1:
+        raise ValueError(f"top_p_filter expects 1D logits, got {logits.ndim}D")
     order = np.argsort(logits, kind="stable")[::-1]
     cumulative = np.cumsum(softmax(logits[order]))
     cutoff = int(np.searchsorted(cumulative, p)) + 1

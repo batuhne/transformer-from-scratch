@@ -67,6 +67,11 @@ def test_top_p_rejects_out_of_range(p: float) -> None:
         top_p_filter(np.array([1.0, 2.0, 3.0]), p=p)
 
 
+def test_top_p_rejects_non_1d_input() -> None:
+    with pytest.raises(ValueError, match="1D"):
+        top_p_filter(np.array([[1.0, 2.0], [3.0, 4.0]]), p=0.9)
+
+
 def test_top_p_stable_under_ties() -> None:
     # Two equal-prob entries at the cutoff; stable sort guarantees deterministic
     # selection regardless of numpy partition internals.

@@ -32,11 +32,13 @@ def cross_entropy_loss(
     N = logits.shape[0]
     z_max = np.max(logits, axis=-1, keepdims=True)
     shifted = logits - z_max
-    log_sum_exp = np.log(np.sum(np.exp(shifted), axis=-1, keepdims=True))
-    log_probs = shifted - log_sum_exp
+    exp_shifted = np.exp(shifted)
+    sum_exp = np.sum(exp_shifted, axis=-1, keepdims=True)
+    log_probs = shifted - np.log(sum_exp)
     nll = -log_probs[np.arange(N), targets]
     loss = float(np.mean(nll))
-    dlogits = np.exp(log_probs)
+    # Reuse exp_shifted for the softmax probabilities instead of a second exp.
+    dlogits = exp_shifted / sum_exp
     dlogits[np.arange(N), targets] -= 1
     dlogits /= N
     return loss, dlogits
@@ -81,7 +83,7 @@ class ReLU:
         self.mask: np.ndarray
 
     def forward(self, x: np.ndarray) -> np.ndarray:
-        self.mask = (x > 0).astype(x.dtype)
+        self.mask = x > 0
         return x * self.mask
 
     def backward(self, dout: np.ndarray) -> np.ndarray:

@@ -53,34 +53,35 @@ def save_weights(
 
 def load_weights(model: Transformer, path: str | Path) -> None:
     """Load weights into `model` in place; preserves weight-tying views."""
-    data = np.load(path)
-    for i, (obj, name) in enumerate(model.params()):
-        key = _key(i, obj, name)
-        if key not in data:
-            raise KeyError(f"checkpoint missing key {key!r}")
-        target = getattr(obj, name)
-        source = data[key]
-        if target.shape != source.shape:
-            raise ValueError(
-                f"shape mismatch for {key}: model has {target.shape}, checkpoint has {source.shape}"
-            )
-        target[...] = source
+    with np.load(path) as data:
+        for i, (obj, name) in enumerate(model.params()):
+            key = _key(i, obj, name)
+            if key not in data:
+                raise KeyError(f"checkpoint missing key {key!r}")
+            target = getattr(obj, name)
+            source = data[key]
+            if target.shape != source.shape:
+                raise ValueError(
+                    f"shape mismatch for {key}: model has "
+                    f"{target.shape}, checkpoint has {source.shape}"
+                )
+            target[...] = source
 
 
 def load_pretrained(path: str | Path) -> tuple[Transformer, CharVocab | None]:
     """Rebuild a Transformer (and CharVocab if embedded) directly from a checkpoint."""
-    data = np.load(path)
-    if _CONFIG_KEY not in data:
-        raise KeyError(
-            f"{path} has no embedded config; use load_weights with a manually "
-            f"constructed model instead"
-        )
-    config = json.loads(str(data[_CONFIG_KEY]))
+    with np.load(path) as data:
+        if _CONFIG_KEY not in data:
+            raise KeyError(
+                f"{path} has no embedded config; use load_weights with a manually "
+                f"constructed model instead"
+            )
+        config = json.loads(str(data[_CONFIG_KEY]))
+        chars = list(str(data[_VOCAB_KEY])) if _VOCAB_KEY in data else None
     model = Transformer(**config)
     load_weights(model, path)
     vocab: CharVocab | None = None
-    if _VOCAB_KEY in data:
-        chars = list(str(data[_VOCAB_KEY]))
+    if chars is not None:
         vocab = CharVocab(
             chars=chars,
             char_to_idx={c: i for i, c in enumerate(chars)},

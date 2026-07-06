@@ -42,7 +42,7 @@ class SingleHeadAttention:
 
         scores = (self.Q @ self.K.transpose(0, 2, 1)) / np.sqrt(self.d_k)
         if mask is not None:
-            scores = np.where(mask, -1e9, scores)
+            scores = np.where(mask, -np.inf, scores)
 
         self.attn_weights = softmax(scores)
         return self.attn_weights @ self.V

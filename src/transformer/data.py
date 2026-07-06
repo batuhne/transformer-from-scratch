@@ -28,7 +28,12 @@ class CharVocab:
         return len(self.chars)
 
     def encode(self, s: str) -> list[int]:
-        return [self.char_to_idx[c] for c in s]
+        try:
+            return [self.char_to_idx[c] for c in s]
+        except KeyError as exc:
+            raise KeyError(
+                f"character {exc.args[0]!r} is not in the vocabulary of {self.size} chars"
+            ) from exc
 
     def decode(self, indices: list[int]) -> str:
         return "".join(self.idx_to_char[i] for i in indices)
@@ -36,7 +41,7 @@ class CharVocab:
 
 def load_corpus(path: str | Path) -> tuple[str, CharVocab, np.ndarray]:
     """Read a text file and return (raw text, vocab, encoded int64 array)."""
-    text = Path(path).read_text()
+    text = Path(path).read_text(encoding="utf-8")
     vocab = CharVocab.from_text(text)
     data = np.array(vocab.encode(text), dtype=np.int64)
     return text, vocab, data

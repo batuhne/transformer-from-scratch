@@ -65,7 +65,7 @@ class MultiHeadAttention:
 
         scores = (self.Q @ self.K.transpose(0, 1, 3, 2)) / np.sqrt(self.d_k)
         if mask is not None:
-            scores = np.where(mask, -1e9, scores)
+            scores = np.where(mask, -np.inf, scores)
 
         self.attn_weights = softmax(scores)
         self.attn_post = self.attn_dropout.forward(self.attn_weights)
@@ -100,7 +100,7 @@ class MultiHeadAttention:
             i = np.arange(T_new)[:, None]
             j = np.arange(T_total)[None, :]
             mask = j > (T_cache + i)
-            scores = np.where(mask, -1e9, scores)
+            scores = np.where(mask, -np.inf, scores)
 
         attn = softmax(scores)
         self.attn_weights = attn
