@@ -259,6 +259,47 @@ def test_registries_cover_every_param_and_dropout() -> None:
     )
 
 
+def test_float32_dtype_propagates_end_to_end() -> None:
+    """A float32 model keeps every param, activation, and gradient in float32.
+
+    Guards against a stray float64 scalar (e.g. np.sqrt(d_k)) silently upcasting
+    the whole stack back to float64.
+    """
+    rng = np.random.default_rng(0)
+    model = Transformer(
+        vocab_size=10,
+        d_model=16,
+        n_heads=2,
+        d_ff=32,
+        n_layers=2,
+        max_seq_len=8,
+        dtype=np.float32,
+        rng=rng,
+    )
+    for obj, name in model.params():
+        assert getattr(obj, name).dtype == np.float32
+    assert model.pe.dtype == np.float32
+
+    indices = rng.integers(0, 10, size=(2, 6))
+    logits = model.forward(indices)
+    assert logits.dtype == np.float32
+
+    B, T, V = logits.shape
+    _, dlogits = cross_entropy_loss(logits.reshape(-1, V), indices.reshape(-1))
+    model.backward(dlogits.reshape(B, T, V))
+    for obj, name in model.params():
+        assert getattr(obj, "d" + name).dtype == np.float32
+
+    step_logits, _ = model.forward_step(indices[:, :1], model.init_caches(), position=0)
+    assert step_logits.dtype == np.float32
+
+
+def test_default_dtype_is_float64() -> None:
+    model = Transformer(vocab_size=7, d_model=8, n_heads=2, d_ff=16, n_layers=1, max_seq_len=8)
+    indices = np.random.randint(0, 7, size=(2, 3))
+    assert model.forward(indices).dtype == np.float64
+
+
 def test_model_eval_mode_is_deterministic_under_dropout() -> None:
     """Same input twice in eval mode produces identical logits even with dropout>0."""
     np.random.seed(0)

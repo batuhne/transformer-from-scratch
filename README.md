@@ -84,6 +84,7 @@ Every head in block 0, fed a short prompt. The lower-triangular shape confirms t
 - **Inference**: KV-cached generation, temperature, top-k, and top-p (nucleus) sampling
 - **Evaluation**: deterministic token-weighted perplexity over the full validation set
 - **Reproducibility**: a fixed seed reproduces the same loss curve on a given machine and numpy build
+- **Precision**: float64 by default so the gradient checks stay tight; the whole model switches to float32 via a `dtype` argument for lower-memory inference and training
 
 ## Architecture
 

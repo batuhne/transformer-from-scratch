@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import DTypeLike
 
 
 class LayerNorm:
     """Per-token feature normalization with learnable gamma, beta."""
 
-    def __init__(self, d_model: int, eps: float = 1e-5) -> None:
-        self.gamma = np.ones(d_model)
-        self.beta = np.zeros(d_model)
+    def __init__(self, d_model: int, eps: float = 1e-5, dtype: DTypeLike = np.float64) -> None:
+        self.gamma = np.ones(d_model, dtype=dtype)
+        self.beta = np.zeros(d_model, dtype=dtype)
         self.eps = eps
 
         self.dgamma: np.ndarray | None = None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import DTypeLike
 
 from transformer.utils import randn
 
@@ -11,9 +12,13 @@ class Embedding:
     """Learnable token embedding lookup."""
 
     def __init__(
-        self, vocab_size: int, d_model: int, rng: np.random.Generator | None = None
+        self,
+        vocab_size: int,
+        d_model: int,
+        rng: np.random.Generator | None = None,
+        dtype: DTypeLike = np.float64,
     ) -> None:
-        self.W = randn(rng, vocab_size, d_model) * 0.02
+        self.W = randn(rng, vocab_size, d_model, dtype=dtype) * 0.02
         self.vocab_size = vocab_size
         self.dW: np.ndarray | None = None
         self.indices: np.ndarray
@@ -29,7 +34,9 @@ class Embedding:
         np.add.at(self.dW, self.indices, dout)
 
 
-def get_positional_encoding(max_seq_len: int, d_model: int) -> np.ndarray:
+def get_positional_encoding(
+    max_seq_len: int, d_model: int, dtype: DTypeLike = np.float64
+) -> np.ndarray:
     """Fixed sinusoidal positional encoding (Vaswani et al., 2017)."""
     if d_model % 2:
         raise ValueError(f"d_model must be even (sin/cos pairs), got {d_model}")
@@ -38,4 +45,4 @@ def get_positional_encoding(max_seq_len: int, d_model: int) -> np.ndarray:
     div_term = np.exp(np.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))
     pe[:, 0::2] = np.sin(position * div_term)
     pe[:, 1::2] = np.cos(position * div_term)
-    return pe
+    return pe.astype(dtype, copy=False)

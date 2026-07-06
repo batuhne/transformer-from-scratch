@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
+from numpy.typing import DTypeLike
 
 from transformer.dropout import Dropout
 from transformer.linear import softmax, softmax_backward
@@ -18,6 +21,7 @@ class MultiHeadAttention:
         n_heads: int,
         dropout: float = 0.0,
         rng: np.random.Generator | None = None,
+        dtype: DTypeLike = np.float64,
     ) -> None:
         if d_model % n_heads != 0:
             raise ValueError(f"d_model {d_model} must be divisible by n_heads {n_heads}")
@@ -25,11 +29,11 @@ class MultiHeadAttention:
         self.n_heads = n_heads
         self.d_k = d_model // n_heads
 
-        scale = np.sqrt(2.0 / (d_model + self.d_k))
-        self.W_Q = randn(rng, d_model, d_model) * scale
-        self.W_K = randn(rng, d_model, d_model) * scale
-        self.W_V = randn(rng, d_model, d_model) * scale
-        self.W_O = randn(rng, d_model, d_model) * scale
+        scale = float(np.sqrt(2.0 / (d_model + self.d_k)))
+        self.W_Q = randn(rng, d_model, d_model, dtype=dtype) * scale
+        self.W_K = randn(rng, d_model, d_model, dtype=dtype) * scale
+        self.W_V = randn(rng, d_model, d_model, dtype=dtype) * scale
+        self.W_O = randn(rng, d_model, d_model, dtype=dtype) * scale
 
         self.attn_dropout = Dropout(dropout, rng=rng)
 
@@ -63,7 +67,7 @@ class MultiHeadAttention:
         self.K = self._split_heads(x @ self.W_K)
         self.V = self._split_heads(x @ self.W_V)
 
-        scores = (self.Q @ self.K.transpose(0, 1, 3, 2)) / np.sqrt(self.d_k)
+        scores = (self.Q @ self.K.transpose(0, 1, 3, 2)) / math.sqrt(self.d_k)
         if mask is not None:
             scores = np.where(mask, -np.inf, scores)
 
@@ -95,7 +99,7 @@ class MultiHeadAttention:
         T_new = x.shape[1]
         T_total = T_cache + T_new
 
-        scores = (Q @ K.transpose(0, 1, 3, 2)) / np.sqrt(self.d_k)
+        scores = (Q @ K.transpose(0, 1, 3, 2)) / math.sqrt(self.d_k)
         if T_new > 1:
             i = np.arange(T_new)[:, None]
             j = np.arange(T_total)[None, :]
@@ -120,7 +124,7 @@ class MultiHeadAttention:
         d_attn = self.attn_dropout.backward(d_attn_post)
 
         d_scores = softmax_backward(d_attn, self.attn_weights)
-        d_scores /= np.sqrt(self.d_k)
+        d_scores /= math.sqrt(self.d_k)
 
         dQ = d_scores @ self.K
         dK = d_scores.transpose(0, 1, 3, 2) @ self.Q

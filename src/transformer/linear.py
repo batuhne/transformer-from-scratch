@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 import numpy as np
+from numpy.typing import DTypeLike
 
 from transformer.utils import randn
 
@@ -53,13 +54,14 @@ class Linear:
         out_features: int,
         init: Literal["xavier", "he"] = "xavier",
         rng: np.random.Generator | None = None,
+        dtype: DTypeLike = np.float64,
     ) -> None:
         if init == "he":
-            scale = np.sqrt(2.0 / in_features)
+            scale = float(np.sqrt(2.0 / in_features))
         else:
-            scale = np.sqrt(2.0 / (in_features + out_features))
-        self.W = randn(rng, in_features, out_features) * scale
-        self.b = np.zeros(out_features)
+            scale = float(np.sqrt(2.0 / (in_features + out_features)))
+        self.W = randn(rng, in_features, out_features, dtype=dtype) * scale
+        self.b = np.zeros(out_features, dtype=dtype)
         self.dW: np.ndarray | None = None
         self.db: np.ndarray | None = None
         self.x: np.ndarray

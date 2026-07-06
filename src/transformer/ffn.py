@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import DTypeLike
 
 from transformer.linear import Linear, ReLU
 
@@ -10,11 +11,17 @@ from transformer.linear import Linear, ReLU
 class FeedForward:
     """Two-layer MLP applied independently at each sequence position."""
 
-    def __init__(self, d_model: int, d_ff: int, rng: np.random.Generator | None = None) -> None:
+    def __init__(
+        self,
+        d_model: int,
+        d_ff: int,
+        rng: np.random.Generator | None = None,
+        dtype: DTypeLike = np.float64,
+    ) -> None:
         # He init: both layers feed a ReLU network, so scale by sqrt(2/fan_in).
-        self.linear1 = Linear(d_model, d_ff, init="he", rng=rng)
+        self.linear1 = Linear(d_model, d_ff, init="he", rng=rng, dtype=dtype)
         self.relu = ReLU()
-        self.linear2 = Linear(d_ff, d_model, init="he", rng=rng)
+        self.linear2 = Linear(d_ff, d_model, init="he", rng=rng, dtype=dtype)
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         return self.linear2.forward(self.relu.forward(self.linear1.forward(x)))

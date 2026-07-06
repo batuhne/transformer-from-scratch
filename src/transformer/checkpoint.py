@@ -30,6 +30,7 @@ def _model_config(model: Transformer) -> dict:
         "max_seq_len": model.max_seq_len,
         "dropout": block.drop1.p,
         "tie_weights": model.tie_weights,
+        "dtype": str(np.dtype(model.dtype)),
     }
 
 

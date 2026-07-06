@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import DTypeLike
 
 from transformer.dropout import Dropout
 from transformer.ffn import FeedForward
@@ -20,12 +21,13 @@ class TransformerBlock:
         d_ff: int,
         dropout: float = 0.0,
         rng: np.random.Generator | None = None,
+        dtype: DTypeLike = np.float64,
     ) -> None:
-        self.ln1 = LayerNorm(d_model)
-        self.mha = MultiHeadAttention(d_model, n_heads, dropout=dropout, rng=rng)
+        self.ln1 = LayerNorm(d_model, dtype=dtype)
+        self.mha = MultiHeadAttention(d_model, n_heads, dropout=dropout, rng=rng, dtype=dtype)
         self.drop1 = Dropout(dropout, rng=rng)
-        self.ln2 = LayerNorm(d_model)
-        self.ffn = FeedForward(d_model, d_ff, rng=rng)
+        self.ln2 = LayerNorm(d_model, dtype=dtype)
+        self.ffn = FeedForward(d_model, d_ff, rng=rng, dtype=dtype)
         self.drop2 = Dropout(dropout, rng=rng)
 
     def forward(self, x: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:

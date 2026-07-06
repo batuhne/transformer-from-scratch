@@ -100,3 +100,13 @@ def test_load_pretrained_without_vocab(tmp_path: Path) -> None:
     save_weights(a, tmp_path / "w.npz")  # no vocab passed
     _, vocab_b = load_pretrained(tmp_path / "w.npz")
     assert vocab_b is None
+
+
+def test_load_pretrained_restores_dtype(tmp_path: Path) -> None:
+    a = Transformer(
+        vocab_size=7, d_model=8, n_heads=2, d_ff=16, n_layers=1, max_seq_len=8, dtype=np.float32
+    )
+    save_weights(a, tmp_path / "w.npz")
+    b, _ = load_pretrained(tmp_path / "w.npz")
+    assert np.dtype(b.dtype) == np.float32
+    assert b.forward(np.random.randint(0, 7, size=(2, 3))).dtype == np.float32

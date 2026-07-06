@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
+from numpy.typing import DTypeLike
 
 from transformer.linear import softmax, softmax_backward
 from transformer.utils import randn
@@ -17,11 +20,17 @@ def causal_mask(seq_len: int) -> np.ndarray:
 class SingleHeadAttention:
     """Scaled dot-product attention (teaching reference; the model uses MultiHeadAttention)."""
 
-    def __init__(self, d_model: int, d_k: int, rng: np.random.Generator | None = None) -> None:
-        scale = np.sqrt(2.0 / (d_model + d_k))
-        self.W_Q = randn(rng, d_model, d_k) * scale
-        self.W_K = randn(rng, d_model, d_k) * scale
-        self.W_V = randn(rng, d_model, d_k) * scale
+    def __init__(
+        self,
+        d_model: int,
+        d_k: int,
+        rng: np.random.Generator | None = None,
+        dtype: DTypeLike = np.float64,
+    ) -> None:
+        scale = float(np.sqrt(2.0 / (d_model + d_k)))
+        self.W_Q = randn(rng, d_model, d_k, dtype=dtype) * scale
+        self.W_K = randn(rng, d_model, d_k, dtype=dtype) * scale
+        self.W_V = randn(rng, d_model, d_k, dtype=dtype) * scale
         self.d_k = d_k
 
         self.dW_Q: np.ndarray | None = None
@@ -40,7 +49,7 @@ class SingleHeadAttention:
         self.K = x @ self.W_K
         self.V = x @ self.W_V
 
-        scores = (self.Q @ self.K.transpose(0, 2, 1)) / np.sqrt(self.d_k)
+        scores = (self.Q @ self.K.transpose(0, 2, 1)) / math.sqrt(self.d_k)
         if mask is not None:
             scores = np.where(mask, -np.inf, scores)
 
@@ -54,7 +63,7 @@ class SingleHeadAttention:
         dV = self.attn_weights.transpose(0, 2, 1) @ dout
 
         d_scores = softmax_backward(d_attn, self.attn_weights)
-        d_scores /= np.sqrt(self.d_k)
+        d_scores /= math.sqrt(self.d_k)
 
         dQ = d_scores @ self.K
         dK = d_scores.transpose(0, 2, 1) @ self.Q

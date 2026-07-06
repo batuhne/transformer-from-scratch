@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import DTypeLike
 
 from transformer.attention import causal_mask
 from transformer.block import TransformerBlock
@@ -26,20 +27,22 @@ class Transformer:
         dropout: float = 0.0,
         tie_weights: bool = False,
         rng: np.random.Generator | None = None,
+        dtype: DTypeLike = np.float64,
     ) -> None:
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.max_seq_len = max_seq_len
         self.tie_weights = tie_weights
+        self.dtype = np.dtype(dtype).type
 
-        self.embedding = Embedding(vocab_size, d_model, rng=rng)
-        self.pe = get_positional_encoding(max_seq_len, d_model)
+        self.embedding = Embedding(vocab_size, d_model, rng=rng, dtype=self.dtype)
+        self.pe = get_positional_encoding(max_seq_len, d_model, dtype=self.dtype)
         self.blocks = [
-            TransformerBlock(d_model, n_heads, d_ff, dropout=dropout, rng=rng)
+            TransformerBlock(d_model, n_heads, d_ff, dropout=dropout, rng=rng, dtype=self.dtype)
             for _ in range(n_layers)
         ]
-        self.ln_final = LayerNorm(d_model)
-        self.output_proj = Linear(d_model, vocab_size, rng=rng)
+        self.ln_final = LayerNorm(d_model, dtype=self.dtype)
+        self.output_proj = Linear(d_model, vocab_size, rng=rng, dtype=self.dtype)
         if tie_weights:
             # output_proj.W becomes a transposed view of embedding.W: the two
             # share storage, so in-place Adam updates to embedding.W propagate.
