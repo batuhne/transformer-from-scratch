@@ -47,16 +47,16 @@ Single seed, same data and budget, one feature toggled per row (see [`experiment
 
 | Config | Val perplexity |
 |--------|---------------|
-| baseline (grad clip only) | 51.3 |
-| + dropout | 11.8 |
-| + weight tying | 16.0 |
-| + AdamW | 52.6 |
-| + LR schedule | 15.7 |
-| **full modern stack** | **8.4** |
+| baseline (grad clip only) | 36.3 |
+| + dropout | 11.2 |
+| + weight tying | 12.8 |
+| + AdamW | 38.3 |
+| + LR schedule | 15.0 |
+| **full modern stack** | **8.6** |
 
 Dropout is the biggest single win on this corpus; weight decay alone does not help and only pays off stacked with other regularization.
 
-All rows use a single seed, so treat the magnitudes as directional rather than exact. On a corpus this small, seed-to-seed variance is large enough that near-ties (the LR schedule and weight-tying rows, for instance) should not be read as a real ranking; a rigorous comparison would repeat each config across several seeds and report mean and standard deviation.
+All rows use a single seed, so treat the magnitudes as directional rather than exact. On a corpus this small, seed-to-seed variance is large enough that small gaps between rows should not be read as a firm ranking; a rigorous comparison would repeat each config across several seeds and report mean and standard deviation.
 
 ### KV-cache speedup
 
